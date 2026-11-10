@@ -29,6 +29,6 @@ DEVELOPMENT_TEAM = YOURTEAMID
 - Add words to `lib/data/dictionary.dart` (Lithuanian · English · Polish shelf name).
 - Improve translations in `lib/core/i18n.dart`.
 - Add a Lithuanian town to `lib/data/geo.dart`, with road distances.
-- **Retailer data** is collected in the separate collector repository, **zlotika-data**. New chains belong there.
+- **Retailer data** is collected in the separate collector repository, [zlotika-data](https://github.com/Zenkiux/zlotika-data). New chains belong there.
 
 Please run `flutter analyze` and `flutter test` before opening a pull request.

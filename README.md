@@ -7,7 +7,7 @@
 - **Trip cost:** include fuel and see your real saving.
 - **Shopping list:** shows each item's Polish name so you can find it on the shelf, and shows it to staff when needed.
 
-Built with Flutter for iOS, Android, web and macOS. The code is under the MIT licence; the name and logo are reserved (see `TRADEMARKS.md`). Contributions are welcome (see `CONTRIBUTING.md`). Deals and leaflets come from the companion collector repository, **zlotika-data**.
+Built with Flutter for iOS, Android, web and macOS. The code is under the MIT licence; the name and logo are reserved (see `TRADEMARKS.md`). Contributions are welcome (see `CONTRIBUTING.md`). Deals and leaflets come from the companion collector repository, [zlotika-data](https://github.com/Zenkiux/zlotika-data).
 
 ---
 
