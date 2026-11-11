@@ -8,6 +8,7 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/calendar.dart';
 import '../../data/geo.dart';
+import '../../services/fuel.dart';
 import '../../main.dart';
 import '../../widgets/ui.dart';
 
@@ -16,12 +17,12 @@ class TripCalc {
   TripCalc(AppState s)
       : km = (s.origin.km[s.destId] ?? 0) * 2,
         litres = (s.origin.km[s.destId] ?? 0) * 2 * s.consumption / 100,
-        fuelCost = s.ltFuelPrice == null ? null : (s.origin.km[s.destId] ?? 0) * 2 * s.consumption / 100 * s.ltFuelPrice!,
-        plFuelEur = s.plFuelPrice == null ? null : s.toEur(s.plFuelPrice!),
+        fuelCost = s.ltFuel == null ? null : (s.origin.km[s.destId] ?? 0) * 2 * s.consumption / 100 * s.ltFuel!,
+        plFuelEur = s.plFuel == null ? null : s.toEur(s.plFuel!),
         basket = s.basket(),
         refuelLitres = s.refuelLitres,
         travellers = s.travellers,
-        ltFuel = s.ltFuelPrice;
+        ltFuel = s.ltFuel;
 
   final int km;
   final double litres;
@@ -63,7 +64,7 @@ class _TripScreenState extends State<TripScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final s = AppScope.read(context);
-    _step ??= (s.ltFuelPrice == null || s.plFuelPrice == null) ? 0 : null;
+    _step ??= (s.ltFuel == null || s.plFuel == null) ? 0 : null;
   }
 
   void _go(int? step) => setState(() => _step = step);
@@ -104,7 +105,7 @@ class _Wizard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = context.c;
-    final canNext = step != 3 || (s.ltFuelPrice != null && s.plFuelPrice != null);
+    final canNext = step != 3 || (s.ltFuel != null && s.plFuel != null);
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
@@ -221,20 +222,26 @@ class _Wizard extends StatelessWidget {
     return [
       ..._title(context, 'tripFuel', 'tripFuelSub'),
       _PriceField(
+        key: ValueKey('lt-${s.fuel.name}'),
         label: context.s('fuelLt'),
         suffix: '€',
         value: s.ltFuelPrice,
+        auto: s.autoLtFuel,
+        autoSource: s.autoLtSource,
         onChanged: (v) => s.update((x) => x.ltFuelPrice = v),
       ),
-      _SourceLink(text: context.s('srcLt'), url: 'https://degalukainos.ena.lt/'),
+      if (s.autoLtFuel == null) _SourceLink(text: context.s('srcLt'), url: 'https://degalukainos.ena.lt/'),
       const SizedBox(height: 18),
       _PriceField(
+        key: ValueKey('pl-${s.fuel.name}'),
         label: context.s('fuelPl'),
         suffix: 'zł',
         value: s.plFuelPrice,
+        auto: s.autoPlFuel,
+        autoSource: s.autoPlSource,
         onChanged: (v) => s.update((x) => x.plFuelPrice = v),
       ),
-      _SourceLink(text: context.s('srcPl'), url: 'https://www.e-petrol.pl/notowania/rynek-krajowy/ceny-stacje-paliw'),
+      if (s.autoPlFuel == null) _SourceLink(text: context.s('srcPl'), url: 'https://www.e-petrol.pl/notowania/rynek-krajowy/ceny-stacje-paliw'),
       const SizedBox(height: 18),
       Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -255,9 +262,11 @@ class _Wizard extends StatelessWidget {
 }
 
 class _PriceField extends StatefulWidget {
-  const _PriceField({required this.label, required this.suffix, required this.value, required this.onChanged});
+  const _PriceField({super.key, required this.label, required this.suffix, required this.value, required this.onChanged, this.auto, this.autoSource});
   final String label, suffix;
-  final double? value;
+  final double? value; // typed by the user
+  final double? auto; // published average, used when nothing is typed
+  final FuelPrice? autoSource;
   final ValueChanged<double?> onChanged;
 
   @override
@@ -265,31 +274,86 @@ class _PriceField extends StatefulWidget {
 }
 
 class _PriceFieldState extends State<_PriceField> {
-  late final _c = TextEditingController(text: widget.value?.toStringAsFixed(3).replaceAll('.', ','));
+  static String _fmt(double? v) => v?.toStringAsFixed(3).replaceAll('.', ',') ?? '';
+  late final _c = TextEditingController(text: _fmt(widget.value ?? widget.auto));
+  final _focus = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    // Leaving the field empty falls back to the published average; show it again.
+    _focus.addListener(() {
+      if (!_focus.hasFocus && widget.value == null) _c.text = _fmt(widget.auto);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _PriceField old) {
+    super.didUpdateWidget(old);
+    if (!_focus.hasFocus && widget.value == null && old.auto != widget.auto) _c.text = _fmt(widget.auto);
+  }
 
   @override
   void dispose() {
     _c.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(widget.label, style: context.tt.titleMedium),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _c,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
-          style: context.tt.headlineSmall,
-          decoration: InputDecoration(
-            hintText: widget.suffix == '€' ? '1,749' : '5,99',
-            suffixIcon: Padding(padding: const EdgeInsets.only(right: 18), child: Text(widget.suffix, style: context.tt.titleLarge!.copyWith(color: context.c.text3))),
-            suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-          ),
-          onChanged: (v) => widget.onChanged(parseAmount(v)),
+  Widget build(BuildContext context) {
+    final src = widget.autoSource;
+    final usingAuto = widget.value == null && widget.auto != null;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(widget.label, style: context.tt.titleMedium),
+      const SizedBox(height: 8),
+      TextField(
+        controller: _c,
+        focusNode: _focus,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+        style: context.tt.headlineSmall,
+        decoration: InputDecoration(
+          hintText: widget.suffix == '€' ? '1,749' : '5,99',
+          suffixIcon: Padding(padding: const EdgeInsets.only(right: 18), child: Text(widget.suffix, style: context.tt.titleLarge!.copyWith(color: context.c.text3))),
+          suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
         ),
-      ]);
+        onChanged: (v) {
+          final p = parseAmount(v);
+          // Typing the average back is the same as using the average.
+          widget.onChanged(p != null && widget.auto != null && (p - widget.auto!).abs() < 0.0005 ? null : p);
+        },
+      ),
+      if (src != null) ...[
+        const SizedBox(height: 8),
+        if (usingAuto)
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.auto_awesome_rounded, size: 18, color: context.c.good),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                context.s(src.region != null ? 'fuelAutoRegion' : 'fuelAuto', {
+                  'src': src.source == 'EU Weekly Oil Bulletin' ? context.s('srcEuBulletin') : src.source,
+                  'date': DateTime.tryParse(src.date) == null ? src.date : dayMonth(DateTime.parse(src.date), context.lang),
+                  'region': src.region ?? '',
+                }) +
+                    (src.currency == 'EUR' && widget.suffix == 'zł' ? context.s('fuelAutoConverted') : ''),
+                style: context.tt.bodyMedium!.copyWith(color: context.c.text2),
+              ),
+            ),
+          ])
+        else
+          TextButton.icon(
+            onPressed: () {
+              _c.text = _fmt(widget.auto);
+              widget.onChanged(null);
+            },
+            icon: const Icon(Icons.restart_alt_rounded, size: 20),
+            label: Text(context.s('fuelUseAuto', {'v': '${_fmt(widget.auto)} ${widget.suffix}'})),
+          ),
+      ],
+    ]);
+  }
 }
 
 class _SourceLink extends StatelessWidget {

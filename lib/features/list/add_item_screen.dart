@@ -5,6 +5,7 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/dictionary.dart';
 import '../../widgets/ui.dart';
+import 'deal_pick.dart';
 
 String newId() => DateTime.now().microsecondsSinceEpoch.toRadixString(36);
 
@@ -24,10 +25,18 @@ class _AddItemScreenState extends State<AddItemScreen> {
     super.dispose();
   }
 
-  void _addTerm(Term t) {
+  Future<void> _addTerm(Term t) async {
     final s = AppScope.read(context);
     final name = context.lang == Lang.lt ? t.lt : t.en;
-    s.addItem(ListItem(id: newId(), name: name, plName: t.pl));
+    final item = ListItem(id: newId(), name: name, plName: t.pl);
+    final matches = s.dealsFor(t.pl);
+    if (matches.isNotEmpty) {
+      // One question: which of this week's deals? The price is filled in from it.
+      final d = await pickDeal(context, context.s('matchPickTitle', {'name': name}), matches);
+      if (!mounted) return;
+      if (d != null) applyDeal(item, d, s.dealPrice(d));
+    }
+    s.addItem(item);
     _done(name);
   }
 
@@ -128,6 +137,7 @@ class _TermRow extends StatelessWidget {
                 Text(lt ? term.lt : term.en, style: context.tt.titleMedium),
                 const SizedBox(height: 4),
                 PlName(term.pl),
+                if (AppScope.of(context).dealsFor(term.pl) case final m when m.isNotEmpty) ...[const SizedBox(height: 8), DealCountPill(m)],
               ]),
             ),
             Icon(Icons.add_circle_rounded, color: Brand.yellow, size: 32),

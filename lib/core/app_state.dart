@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/geo.dart';
 import '../services/deals.dart';
+import '../services/fuel.dart';
+import '../services/match.dart';
+import '../data/dictionary.dart' show terms;
 import '../services/nbp.dart';
 import 'i18n.dart';
 
@@ -65,8 +68,35 @@ class AppState extends ChangeNotifier {
   double consumption = 6.2;
   int refuelLitres = 40;
   int travellers = 1;
-  double? ltFuelPrice; // € / l, entered by the user
-  double? plFuelPrice; // zł / l, entered by the user
+  double? ltFuelPrice; // € / l, typed by the user — overrides the published average
+  double? plFuelPrice; // zł / l, typed by the user — overrides the published average
+  FuelFeed? fuelFeed; // published weekly averages (EU Oil Bulletin, e-petrol.pl)
+
+  double? _pick(FuelPrice? p) => p == null ? null : switch (fuel) { FuelType.diesel => p.diesel, FuelType.petrol => p.pb95, FuelType.lpg => p.lpg };
+
+  /// Published Lithuanian average for the chosen fuel, € / l.
+  FuelPrice? get autoLtSource => _pick(fuelFeed?.lt) != null ? fuelFeed!.lt : null;
+  double? get autoLtFuel => _pick(fuelFeed?.lt);
+
+  /// Published Polish average for the chosen fuel, zł / l: Podlaskie if fresh, else national
+  /// (e-petrol), else the EU bulletin converted at the NBP rate.
+  FuelPrice? get autoPlSource {
+    for (final p in [fuelFeed?.plRegion, fuelFeed?.pl]) {
+      if (_pick(p) != null) return p;
+    }
+    return (_pick(fuelFeed?.plEu) != null && rate != null) ? fuelFeed!.plEu : null;
+  }
+
+  double? get autoPlFuel {
+    final p = autoPlSource;
+    final v = _pick(p);
+    if (p == null || v == null) return null;
+    return p.currency == 'PLN' ? v : v * rate!.mid;
+  }
+
+  /// What the calculator uses: the user's own price if typed, else the published average.
+  double? get ltFuel => ltFuelPrice ?? autoLtFuel;
+  double? get plFuel => plFuelPrice ?? autoPlFuel;
   double cardFeePct = 0;
 
   // List
@@ -110,6 +140,40 @@ class AppState extends ChangeNotifier {
 
   double dealPrice(Deal d) => priceFixes[d.id] ?? d.price;
 
+  final Map<String, List<Deal>> _matchCache = {};
+  Object? _matchKey;
+
+  /// This week's deals for a Polish shelf name, best first. Cached per feed.
+  List<Deal> dealsFor(String? plName) {
+    if (plName == null || plName.isEmpty) return const [];
+    final key = (feed, feedConfig);
+    if (_matchKey != key) {
+      _matchCache.clear();
+      _matchKey = key;
+    }
+    return _matchCache.putIfAbsent(plName, () {
+      var food = false;
+      for (final t in terms) {
+        if (t.pl == plName) food = const {'meat', 'dairy', 'pantry', 'drinks'}.contains(t.cat);
+      }
+      return matchDeals(plName, deals, food: food);
+    });
+  }
+
+  /// List lines with a Polish price (from a deal or typed).
+  ({double plEur, int n}) plOnlyTotal() {
+    var sum = 0.0;
+    var n = 0;
+    for (final i in items) {
+      if (i.plPrice == null) continue;
+      final e = toEur(i.plPrice!);
+      if (e == null) continue;
+      sum += e * i.qty;
+      n++;
+    }
+    return (plEur: sum, n: n);
+  }
+
   // Exchange rate (live from NBP, cached)
   NbpRate? rate;
   bool rateLoading = false;
@@ -150,6 +214,8 @@ class AppState extends ChangeNotifier {
       if (f != null) feed = DealFeed.fromJson(jsonDecode(f) as Map<String, dynamic>);
       final lf = _prefs.getString('$_key.leaflets');
       if (lf != null) _leaflets = _parseLeaflets(lf);
+      final fu = _prefs.getString('$_key.fuel');
+      if (fu != null) fuelFeed = FuelFeed.fromJson(jsonDecode(fu) as Map<String, dynamic>);
       final c = _prefs.getString('$_key.feedConfig');
       if (c != null) feedConfig = FeedConfig.fromJson(jsonDecode(c) as Map<String, dynamic>);
     } catch (_) {}
@@ -248,6 +314,13 @@ class AppState extends ChangeNotifier {
           }
         } catch (_) {/* keep cached leaflets */}
       }
+      try {
+        final fb = await FuelFeed.fetch();
+        if (fb.isNotEmpty) {
+          fuelFeed = FuelFeed.fromJson(jsonDecode(fb) as Map<String, dynamic>);
+          await _prefs.setString('$_key.fuel', fb);
+        }
+      } catch (_) {/* keep cached fuel prices */}
       if (body.isNotEmpty) {
         feed = DealFeed.fromJson(jsonDecode(body) as Map<String, dynamic>);
         await _prefs.setString('$_key.feed', body);

@@ -5,7 +5,9 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
+import '../../data/chains.dart';
 import '../../widgets/ui.dart';
+import 'deal_pick.dart';
 import '../scan/scan_screen.dart';
 import 'add_item_screen.dart';
 import 'item_sheet.dart';
@@ -86,6 +88,18 @@ class _Summary extends StatelessWidget {
     final lang = context.lang;
     final c = context.c;
     final b = s.basket();
+    final plOnly = s.plOnlyTotal();
+    if (b.priced == 0 && plOnly.n > 0) {
+      return Panel(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(context.s('listPlOnly'), style: context.tt.bodyMedium),
+          const SizedBox(height: 2),
+          Text(eur(plOnly.plEur, lang), style: context.tt.headlineSmall),
+          const SizedBox(height: 8),
+          Text(context.s('listPlOnlySub', {'n': plOnly.n, 'm': s.items.length}), style: context.tt.bodyMedium),
+        ]),
+      );
+    }
     if (b.priced == 0) {
       return Panel(
         color: c.warnSoft,
@@ -133,7 +147,16 @@ class _ItemRow extends StatelessWidget {
     final done = item.checked;
 
     Widget priceLine() {
+      if (!item.hasPrices && item.plPrice != null) {
+        final shop = item.chain == null ? null : chainById(item.chain!)?.name;
+        return Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          Text([zl(item.plPrice!, lang), ?shop].join(' · '), style: context.tt.bodyMedium),
+          Pill(context.s('itemNeedLt'), fg: Brand.ink, bg: Brand.yellow, icon: Icons.edit_rounded),
+        ]);
+      }
       if (!item.hasPrices) {
+        final m = s.dealsFor(item.plName);
+        if (m.isNotEmpty) return DealCountPill(m);
         return Pill(context.s('itemAddPrices'), fg: Brand.ink, bg: Brand.yellow, icon: Icons.edit_rounded);
       }
       final good = (saving ?? 0) > 0.009;

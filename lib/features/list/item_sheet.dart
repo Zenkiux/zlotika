@@ -5,7 +5,9 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
+import '../../services/deals.dart';
 import '../../widgets/ui.dart';
+import 'deal_pick.dart';
 
 Future<void> showItemSheet(BuildContext context, ListItem item) => showSheet(context, (_) => _ItemSheet(item: item));
 
@@ -21,6 +23,7 @@ class _ItemSheetState extends State<_ItemSheet> {
   late final _pl = TextEditingController(text: widget.item.plPrice?.toStringAsFixed(2).replaceAll('.', ','));
   late final _lt = TextEditingController(text: widget.item.ltPrice?.toStringAsFixed(2).replaceAll('.', ','));
   late int _qty = widget.item.qty;
+  Deal? _picked; // deal chosen in this sheet; its price fills the PL field
 
   @override
   void dispose() {
@@ -34,6 +37,10 @@ class _ItemSheetState extends State<_ItemSheet> {
     s.changeItem(widget.item.id, (i) {
       i.qty = _qty;
       i.plPrice = parseAmount(_pl.text);
+      if (_picked != null && i.plPrice == s.dealPrice(_picked!)) {
+        i.chain = _picked!.chain;
+        i.dealId = _picked!.id;
+      }
       i.ltPrice = parseAmount(_lt.text);
     });
     Navigator.pop(context);
@@ -80,6 +87,21 @@ class _ItemSheetState extends State<_ItemSheet> {
           Expanded(child: Text(context.s('itemQty'), style: context.tt.titleMedium)),
           Stepper2(value: _qty.toDouble(), onChanged: (v) => setState(() => _qty = v.toInt())),
         ]),
+        if (item.dealId == null && _picked == null && s.dealsFor(item.plName).isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(context.s('matchPickTitle', {'name': item.name}), style: context.tt.titleMedium),
+          const SizedBox(height: 4),
+          Text(context.s('matchPickSub'), style: context.tt.bodyMedium),
+          const SizedBox(height: 10),
+          for (final d in s.dealsFor(item.plName).take(4))
+            DealPickRow(
+              deal: d,
+              onTap: () => setState(() {
+                _picked = d;
+                _pl.text = s.dealPrice(d).toStringAsFixed(2).replaceAll('.', ',');
+              }),
+            ),
+        ],
         const SizedBox(height: 20),
         Text(context.s('itemPricePl'), style: context.tt.titleMedium),
         const SizedBox(height: 8),
