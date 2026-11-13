@@ -128,8 +128,10 @@ class DealFeed {
 
 /// Remote switches: turn collected data off globally or per chain without an app update.
 class FeedConfig {
-  const FeedConfig({this.collectedEnabled = true, this.leafletsEnabled = true, this.disabledChains = const {}});
+  const FeedConfig({this.collectedEnabled = true, this.leafletsEnabled = true, this.disabledChains = const {}, this.disabledPriceSources = const {}});
   final bool collectedEnabled;
+  /// Reference-price sources switched off remotely, lower-case ('barbora', 'rossmann', 'frisco').
+  final Set<String> disabledPriceSources;
   final bool leafletsEnabled;
   final Set<String> disabledChains;
 
@@ -137,6 +139,11 @@ class FeedConfig {
         collectedEnabled: j['collectedEnabled'] as bool? ?? true,
         leafletsEnabled: j['leafletsEnabled'] as bool? ?? true,
         disabledChains: ((j['disabledChains'] as List?) ?? []).map((e) => '$e').toSet(),
+        disabledPriceSources: {
+          for (final e in ((j['priceSources'] as Map?) ?? {}).entries)
+            if (e.value == false) '${e.key}'.toLowerCase(),
+          ...((j['disabledPriceSources'] as List?) ?? []).map((e) => '$e'),
+        },
       );
 }
 

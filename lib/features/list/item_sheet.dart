@@ -5,9 +5,12 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
+import '../../data/chains.dart';
+import '../../services/prices.dart';
 import '../../services/deals.dart';
 import '../../widgets/ui.dart';
 import 'deal_pick.dart';
+import 'add_item_screen.dart' show newId;
 
 Future<void> showItemSheet(BuildContext context, ListItem item) => showSheet(context, (_) => _ItemSheet(item: item));
 
@@ -23,6 +26,7 @@ class _ItemSheetState extends State<_ItemSheet> {
   late final _pl = TextEditingController(text: widget.item.plPrice?.toStringAsFixed(2).replaceAll('.', ','));
   late final _lt = TextEditingController(text: widget.item.ltPrice?.toStringAsFixed(2).replaceAll('.', ','));
   late int _qty = widget.item.qty;
+  late String? _chain = widget.item.chain;
   Deal? _picked; // deal chosen in this sheet; its price fills the PL field
 
   @override
@@ -36,6 +40,7 @@ class _ItemSheetState extends State<_ItemSheet> {
     final s = AppScope.read(context);
     s.changeItem(widget.item.id, (i) {
       i.qty = _qty;
+      i.chain = _chain;
       i.plPrice = parseAmount(_pl.text);
       if (_picked != null && i.plPrice == s.dealPrice(_picked!)) {
         i.chain = _picked!.chain;
@@ -44,6 +49,28 @@ class _ItemSheetState extends State<_ItemSheet> {
       i.ltPrice = parseAmount(_lt.text);
     });
     Navigator.pop(context);
+  }
+
+  /// Which chain to buy it at: puts the item on that shop's stop in the trip plan.
+  List<Widget> _where(BuildContext context, AppState s) {
+    final ids = {...?s.storeFeed?.chainsIn(s.destId), ?_chain};
+    final opts = chains.where((c) => ids.contains(c.id)).toList();
+    if (opts.isEmpty) return const [];
+    Widget chip(String label, String? id, {Color? color}) => ChoiceChip(
+          label: Text(label),
+          selected: _chain == id,
+          avatar: color == null ? null : CircleAvatar(backgroundColor: color, radius: 6),
+          onSelected: (_) => setState(() => _chain = id),
+        );
+    return [
+      const SizedBox(height: 20),
+      Text(context.s('itemWhere'), style: context.tt.titleMedium),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final c in opts) chip(c.name, c.id, color: c.color),
+        chip(context.s('itemWhereAny'), null),
+      ]),
+    ];
   }
 
   @override
@@ -55,7 +82,27 @@ class _ItemSheetState extends State<_ItemSheet> {
     final pl = parseAmount(_pl.text);
     final lt = parseAmount(_lt.text);
     final plEur = pl == null ? null : s.toEur(pl);
-    final saving = (plEur != null && lt != null) ? (lt - plEur) * _qty : null;
+    // Reference prices: typical shelf prices for this kind of product.
+    final plRef = s.plRef(item), ltRef = s.ltRef(item);
+    final Qty? size = _picked != null ? dealQty(_picked!) : (s.basis(item) ?? (pl == null && plRef != null ? (qty: plRef.exQty, unit: plRef.unit) : null));
+    final ltEst = ltRef == null || size == null ? null : AppState.ltFromRef(ltRef, size);
+    final ltUse = lt ?? ltEst;
+    final saving = (plEur != null && ltUse != null) ? (ltUse - plEur) * _qty : null;
+    String unitName(String u) => u == 'units' ? context.s('unitPiece') : u;
+    Widget refLine(String text, String? fill, TextEditingController ctl) => Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 0, 0),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.info_outline_rounded, size: 18, color: c.text3),
+            const SizedBox(width: 8),
+            Expanded(child: Text(text, style: context.tt.bodySmall)),
+            if (fill != null)
+              TextButton(
+                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                onPressed: () => setState(() => ctl.text = fill),
+                child: Text(context.s('refUse')),
+              ),
+          ]),
+        );
 
     // Unit always visible (suffixText only shows while focused).
     InputDecoration dec(String suffix) => InputDecoration(
@@ -81,12 +128,25 @@ class _ItemSheetState extends State<_ItemSheet> {
             kind: BtnKind.secondary,
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => StaffScreen(item: item), fullscreenDialog: true)),
           ),
+          if (!s.isWatched(item.plName!)) ...[
+            const SizedBox(height: 10),
+            BigButton(
+              label: context.s('watchAdd'),
+              icon: Icons.notifications_active_rounded,
+              kind: BtnKind.secondary,
+              onPressed: () {
+                s.addWatch(WatchItem(id: newId(), name: item.name, pl: item.plName!, term: true));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.s('watchAdded', {'name': item.name}))));
+              },
+            ),
+          ],
         ],
         const SizedBox(height: 22),
         Row(children: [
           Expanded(child: Text(context.s('itemQty'), style: context.tt.titleMedium)),
           Stepper2(value: _qty.toDouble(), onChanged: (v) => setState(() => _qty = v.toInt())),
         ]),
+        ..._where(context, s),
         if (item.dealId == null && _picked == null && s.dealsFor(item.plName).isNotEmpty) ...[
           const SizedBox(height: 20),
           Text(context.s('matchPickTitle', {'name': item.name}), style: context.tt.titleMedium),
@@ -98,6 +158,7 @@ class _ItemSheetState extends State<_ItemSheet> {
               deal: d,
               onTap: () => setState(() {
                 _picked = d;
+                _chain = d.chain;
                 _pl.text = s.dealPrice(d).toStringAsFixed(2).replaceAll('.', ',');
               }),
             ),
@@ -114,6 +175,12 @@ class _ItemSheetState extends State<_ItemSheet> {
           onChanged: (_) => setState(() {}),
         ),
         if (plEur != null) Padding(padding: const EdgeInsets.fromLTRB(4, 6, 0, 0), child: Text('≈ ${eur(plEur, lang)}', style: context.tt.bodyMedium)),
+        if (plRef != null)
+          refLine(
+            context.s('refPl', {'v': zl(plRef.unitMedian, lang), 'u': unitName(plRef.unit), 'src': plRef.source, 'ex': plRef.exName, 'p': zl(plRef.exPrice, lang)}),
+            pl == null ? plRef.exPrice.toStringAsFixed(2).replaceAll('.', ',') : null,
+            _pl,
+          ),
         const SizedBox(height: 18),
         Text(context.s('itemPriceLt'), style: context.tt.titleMedium),
         const SizedBox(height: 8),
@@ -122,9 +189,15 @@ class _ItemSheetState extends State<_ItemSheet> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
           style: context.tt.headlineSmall,
-          decoration: dec('€  ${context.s('itemEach')}'),
+          decoration: dec('€  ${context.s('itemEach')}').copyWith(hintText: ltEst == null ? '0,00' : '≈ ${ltEst.toStringAsFixed(2).replaceAll('.', ',')}'),
           onChanged: (_) => setState(() {}),
         ),
+        if (ltRef != null)
+          refLine(
+            context.s(ltEst == null ? 'refLt' : 'refLtPack', {'v': eur(ltRef.unitMedian, lang), 'u': unitName(ltRef.unit), 'src': ltRef.source, 'p': eur(ltEst ?? 0, lang)}),
+            lt == null && ltEst != null ? ltEst.toStringAsFixed(2).replaceAll('.', ',') : null,
+            _lt,
+          ),
         const SizedBox(height: 18),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),

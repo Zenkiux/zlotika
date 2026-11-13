@@ -88,7 +88,7 @@ const _lt = <String, String>{
   'dataOff': 'Produktai pagal brūkšninį kodą — Open Food Facts, licencija ODbL.',
   'dataCalendar': 'Prekybos sekmadieniai ir šventės — pagal Lenkijos įstatymus, įrašyta programoje.',
   'dataDistance': 'Atstumai — apytiksliai, pagal pagrindinius kelius.',
-  'dataPrices': 'Degalų kainos – oficialūs savaitės vidurkiai (ES naftos biuletenis, e-petrol.pl). Lenkiškų prekių kainos imamos iš šios savaitės akcijų. Lietuviškas kainas kol kas įrašote jūs.',
+  'dataPrices': 'Degalų kainos – oficialūs savaitės vidurkiai (ES naftos biuletenis, e-petrol.pl). Lenkiškų prekių kainos – iš šios savaitės akcijų, o įprastos kainos – iš Rossmann parduotuvės svetainės. Įprastos Lietuvos kainos – iš Barbora.lt (Maxima internetinė parduotuvė), atnaujinamos kasdien; jos pažymėtos „≈“. Visada galite įrašyti savo kainą. Parduotuvių vietos – © OpenStreetMap bendraautoriai; darbo laikas – iš tinklų svetainių (Lidl, Aldi, Rossmann, Pepco, Dino, Netto) arba OpenStreetMap.',
   'resetAll': 'Ištrinti visus mano duomenis', 'resetQ': 'Ištrinti viską?', 'resetSub': 'Bus ištrintas sąrašas ir nustatymai šiame telefone.',
   'version': 'Versija {v}',
 
@@ -114,6 +114,77 @@ const _lt = <String, String>{
   'lfLoading': 'Įkeliamas puslapis…', 'lfError': 'Puslapio nepavyko įkelti', 'lfHint': 'Suimkite dviem pirštais, kad padidintumėte',
   'dealOcr': 'Iš leidinio', 'dealOcrNote': 'Pavadinimas ir kaina atpažinti automatiškai iš leidinio. Prieš pirkdami patikrinkite puslapyje.',
   'dealSeePage': 'Žiūrėti leidinio puslapį',
+  // Trip plan
+  'planTitle': 'Kelionės planas', 'planHome': 'Planuoti kelionę', 'planHomeSub': 'Parduotuvės, darbo laikas, kainos ir maršrutas',
+  'planToday': 'Šiandien', 'planTomorrow': 'Rytoj', 'planClosedShort': 'nedirba',
+  'planDaySunday': 'Tą dieną sekmadienis – Lenkijoje parduotuvės nedirba (veikia tik degalinės). Pasirinkite kitą dieną.',
+  'planDayHoliday': 'Tą dieną Lenkijoje šventė – parduotuvės nedirba. Pasirinkite kitą dieną.',
+  'planDrive': 'Į vieną pusę {km} km, apie {h} val. kelio',
+  'planHours': 'Visos jūsų parduotuvės dirba nuo {from} iki {to}',
+  'planLeaveBy': 'Išvykite ne vėliau kaip {t} Lietuvos laiku, kad spėtumėte visur',
+  'planLate': 'Šiandien jau per vėlu spėti visur (reikėjo išvykti iki {t}). Rinkitės rytojų.',
+  'planTz': 'Lenkijoje laikas valanda mažiau. Šalia rodome ir Lietuvos laiką.',
+  'planSpend': 'Lenkijoje išleisite apie', 'planGuessed': 'Iš jų {n} – pagal praeitą kartą mokėtą kainą',
+  'planUnknown': 'Dar nežinoma kaina: {n}', 'planNet': 'Kelionės nauda {v} · plačiau',
+  'planEmpty': 'Pirmiausia įrašykite, ką norite nupirkti.',
+  'planStops': 'Sustojimai ({n})', 'planLoose': 'Dar nepasirinkta parduotuvė',
+  'planLooseSub': 'Paspauskite prekę ir pasirinkite akciją arba parduotuvę – įtrauksime į maršrutą.',
+  'planRoute': 'Maršrutas per visas parduotuves', 'planChecklist': 'Prieš išvykstant: patikrinkite',
+  'planOsm': 'Parduotuvių vietos ir darbo laikas: © OpenStreetMap bendraautoriai ({date}). Darbo laikas gali keistis – svarbiais atvejais pasitikrinkite.',
+  'planFuel': 'Degalinė', 'planFuelLitres': 'Įpilti apie {l} l',
+  'planNoShop': 'Šio tinklo parduotuvės mieste {town} nežinome', 'planNoAddress': 'Adresas nežinomas',
+  'planOtherShop': 'Kita parduotuvė', 'planSubtotal': 'Šioje parduotuvėje', 'planNoPrice': 'kaina ?', 'planLastTime': 'praeitą kartą ({d})',
+  'hoursClosed': 'Tą dieną nedirba', 'hours247': 'Dirba visą parą', 'hoursUnknown': 'Darbo laikas nežinomas', 'hoursClosedNow': 'Šiandien jau uždaryta',
+  'hoursOpenUntil': 'Dabar dirba iki {t} (LT {lt})', 'hoursOpensAt': 'Dirbs {t}–{c} (LT {lt}–{lc})',
+  'hoursGuessed': 'Įprastas šio tinklo laikas mieste – šios parduotuvės tikslaus nežinome.',
+  'itemWhere': 'Kur pirksite?', 'itemWhereAny': 'Dar nežinau',
+
+  // Checklist
+  'ckTitle': 'Prieš išvykstant', 'ckProgress': 'Pažymėta {n} iš {m}',
+  'ckDocs': 'Dokumentai', 'ckRoad': 'Kelyje Lenkijoje', 'ckShop': 'Apsiperkant', 'ckSafety': 'Saugumas',
+  'ckId': 'Asmens tapatybės kortelė arba pasas', 'ckIdSub': 'Lenkijoje privaloma turėti asmens dokumentą. Pasienyje gali būti tikrinama.',
+  'ckLicence': 'Vairuotojo pažymėjimas ir automobilio dokumentai', 'ckLicenceSub': 'Patikrinkite, ar galioja techninė apžiūra ir privalomasis draudimas.',
+  'ckLights': 'Artimosios šviesos visą parą', 'ckLightsSub': 'Lenkijoje jos privalomos ir dieną.',
+  'ckAlcohol': 'Alkoholio riba – 0,2 ‰', 'ckAlcoholSub': 'Lenkijoje griežčiau nei Lietuvoje. Saugiausia – visai negerti.',
+  'ckSpeed': 'Greitis: 50 / 90 / 120 / 140 km/h', 'ckSpeedSub': 'Gyvenvietėje 50, užmiestyje 90, greitkelyje (S) iki 120, autostradoje 140. Kelyje daug greičio kamerų.',
+  'ckBags': 'Krepšiai pirkiniams', 'ckBagsSub': 'Maišeliai parduotuvėse mokami.',
+  'ckCard': 'Mokėkite zlotais', 'ckCardSub': 'Kortelės terminale rinkitės PLN, ne EUR – kitaip kursas būna 3–7 % blogesnis.',
+  'ckDeposit': 'Tara su užstatu', 'ckDepositSub': 'Už butelius ir skardines Lenkijoje imamas užstatas. Atgausite tik grąžinę tarą Lenkijoje.',
+  'ckLimits': 'Kiek galima parsivežti', 'ckLimitsSub': 'ES orientyrai asmeniniam naudojimui: 800 cigarečių, 1 kg tabako, 10 l stipriųjų gėrimų, 20 l tarpinių produktų, 90 l vyno (iš jo iki 60 l putojančio), 110 l alaus. Degalai – bake ir iki 10 l kanistre. Daugiau muitinė gali laikyti prekyba.',
+  'ckLimitsLink': 'Muitinės informacija', 'ck112': 'Pagalbos numeris – 112', 'ck112Sub': 'Veikia ir Lenkijoje. Žemiau – kortelė lenkiškai, jei reikėtų pagalbos.',
+  'ckNote': 'Bendra informacija, ne teisinė konsultacija. Taisyklės gali keistis.',
+  'sosOpen': 'SOS kortelė lenkiškai', 'sosCall': 'Skambinti 112',
+  'sosTranslation': 'Lietuviškai: „Man reikia pagalbos. Prašau paskambinti 112. Esu iš Lietuvos, nekalbu lenkiškai.“',
+
+  // Watchlist
+  'watchTitle': 'Stebimos prekės', 'watchHome': 'Stebimos prekės', 'watchHomeSub': 'Pranešime, kai atsiras akcija',
+  'watchHomeHits': 'Šią savaitę akcijų: {n}',
+  'watchSub': 'Įrašykite, ką perkate nuolat. Kai Lenkijos parduotuvėse atsiras akcija, pranešime.',
+  'watchAlerts': 'Pranešti apie naujas akcijas', 'watchAlertsSub': 'Telefonas tikrina kelis kartus per dieną. Nieko nesiunčiame į serverį.',
+  'watchNoPermission': 'Pranešimai neleisti. Įjunkite juos telefono nustatymuose.',
+  'watchHint': 'Pvz., kava, Pampers, Jacobs', 'watchCustom': 'Stebėti „{q}“', 'watchCustomSub': 'Ieškosime šių žodžių akcijų pavadinimuose (tinka ir prekės ženklai)',
+  'watchEmpty': 'Dar nieko nestebite.', 'watchNoDeals': 'Šiuo metu akcijų nėra', 'watchAdd': 'Stebėti akcijas', 'watchAdded': 'Stebima: {name}',
+  'alertOne': 'Akcija jūsų stebimai prekei', 'alertMany': 'Akcijos jūsų stebimoms prekėms: {n}',
+
+  // History
+  'histTitle': 'Sutaupymai', 'histYear': '{y} m. sutaupėte', 'histYearSub': 'Kelionių: {n} · išleista Lenkijoje {v}',
+  'histHow': 'Skaičiuojame tik prekes, kurių kainą Lietuvoje žinome, ir atimame kelionės degalus.',
+  'histEmpty': 'Grįžę iš Lenkijos paspauskite „Baigiau apsipirkti“ kelionės plane – čia matysite, kiek sutaupėte.',
+  'histTrips': 'Kelionės', 'histHome': 'Šiais metais sutaupėte {v}',
+  'finishTitle': 'Baigiau apsipirkti', 'finishOpen': 'Baigiau apsipirkti',
+  'finishNone': 'Sąraše dar nepažymėjote nupirktų prekių.', 'finishMarkAll': 'Viską nupirkau',
+  'finishSub': 'Nupirkta prekių: {n}. Jos bus išsaugotos istorijoje ir pašalintos iš sąrašo.',
+  'finishReceipt': 'Kvito suma (nebūtina)', 'finishSpent': 'Išleista', 'finishSaving': 'Sutaupyta prekėms',
+  'finishTravel': 'Kelionės degalai', 'finishNet': 'Iš viso', 'finishSave': 'Išsaugoti kelionę',
+  'finishNoLt': 'Nežinome šių prekių kainų Lietuvoje, todėl sutaupymo apskaičiuoti negalime.',
+
+  // Reference prices
+  'unitPiece': 'vnt.', 'refUse': 'Įrašyti',
+  'refPl': 'Įprasta kaina Lenkijoje ~{v}/{u} ({src}, pvz. {ex} – {p})',
+  'refLt': 'Lietuvoje įprastai ~{v}/{u} ({src})',
+  'refLtPack': 'Lietuvoje įprastai ~{v}/{u} ({src}) – tokiam kiekiui ≈ {p}',
+  'refUsualPl': 'įprasta kaina ({src})', 'planVsLt': 'Lietuvoje {lt} – sutaupysite {v}', 'planVsLtWorse': 'Lietuvoje {lt} – ten pigiau {v}',
+
 };
 
 const _en = <String, String>{
@@ -198,7 +269,7 @@ const _en = <String, String>{
   'dataOff': 'Products by barcode — Open Food Facts, ODbL licence.',
   'dataCalendar': 'Trading Sundays and holidays — Polish law, built into the app.',
   'dataDistance': 'Distances — approximate, along main roads.',
-  'dataPrices': 'Fuel prices are official weekly averages (EU Oil Bulletin, e-petrol.pl). Polish product prices come from this week’s deals. Lithuanian prices you still enter yourself for now.',
+  'dataPrices': 'Fuel prices are official weekly averages (EU Oil Bulletin, e-petrol.pl). Polish prices come from this week’s deals, and usual prices from the Rossmann website. Usual Lithuanian prices come from Barbora.lt (Maxima’s online shop), updated daily, and are marked “≈”. You can always enter your own price. Shop locations: © OpenStreetMap contributors; opening hours from the chains’ websites (Lidl, Aldi, Rossmann, Pepco, Dino, Netto) or OpenStreetMap.',
   'resetAll': 'Delete all my data', 'resetQ': 'Delete everything?', 'resetSub': 'Your list and settings on this phone will be deleted.',
   'version': 'Version {v}',
 
@@ -224,7 +295,85 @@ const _en = <String, String>{
   'lfLoading': 'Loading page…', 'lfError': 'Couldn’t load this page', 'lfHint': 'Pinch with two fingers to zoom',
   'dealOcr': 'From leaflet', 'dealOcrNote': 'Name and price were read automatically from the leaflet. Check the page before buying.',
   'dealSeePage': 'See leaflet page',
+  // Trip plan
+  'planTitle': 'Trip plan', 'planHome': 'Plan your trip', 'planHomeSub': 'Shops, opening hours, prices and route',
+  'planToday': 'Today', 'planTomorrow': 'Tomorrow', 'planClosedShort': 'closed',
+  'planDaySunday': 'That day is a Sunday: shops in Poland are closed (only fuel stations open). Pick another day.',
+  'planDayHoliday': 'That day is a public holiday in Poland: shops are closed. Pick another day.',
+  'planDrive': '{km} km each way, about {h} h of driving',
+  'planHours': 'All your shops are open from {from} to {to}',
+  'planLeaveBy': 'Leave by {t} Lithuanian time to make it to every shop',
+  'planLate': 'Too late today to reach every shop (you needed to leave by {t}). Pick tomorrow.',
+  'planTz': 'Poland is one hour behind. Lithuanian time is shown alongside.',
+  'planSpend': 'You’ll spend in Poland about', 'planGuessed': '{n} of them at last time’s price',
+  'planUnknown': 'Price not known yet: {n}', 'planNet': 'Trip benefit {v} · details',
+  'planEmpty': 'First add what you want to buy.',
+  'planStops': 'Stops ({n})', 'planLoose': 'No shop chosen yet',
+  'planLooseSub': 'Tap an item and pick a deal or a shop to add it to the route.',
+  'planRoute': 'Route through all shops', 'planChecklist': 'Before you go: checklist',
+  'planOsm': 'Shop locations and hours: © OpenStreetMap contributors ({date}). Hours can change; check when it matters.',
+  'planFuel': 'Fuel', 'planFuelLitres': 'Fill about {l} l',
+  'planNoShop': 'We don’t know a shop of this chain in {town}', 'planNoAddress': 'Address unknown',
+  'planOtherShop': 'Other shop', 'planSubtotal': 'At this shop', 'planNoPrice': 'price ?', 'planLastTime': 'last time ({d})',
+  'hoursClosed': 'Closed that day', 'hours247': 'Open 24 hours', 'hoursUnknown': 'Hours unknown', 'hoursClosedNow': 'Closed for today',
+  'hoursOpenUntil': 'Open now until {t} (LT {lt})', 'hoursOpensAt': 'Open {t}–{c} (LT {lt}–{lc})',
+  'hoursGuessed': 'Usual hours for this chain in town; this shop’s exact hours are unknown.',
+  'itemWhere': 'Where will you buy it?', 'itemWhereAny': 'Not sure yet',
+
+  // Checklist
+  'ckTitle': 'Before you go', 'ckProgress': '{n} of {m} checked',
+  'ckDocs': 'Documents', 'ckRoad': 'Driving in Poland', 'ckShop': 'Shopping', 'ckSafety': 'Safety',
+  'ckId': 'ID card or passport', 'ckIdSub': 'You must carry an ID document in Poland. There may be checks at the border.',
+  'ckLicence': 'Driving licence and car documents', 'ckLicenceSub': 'Check your MOT and compulsory insurance are valid.',
+  'ckLights': 'Dipped headlights all day', 'ckLightsSub': 'Required in Poland in daytime too.',
+  'ckAlcohol': 'Alcohol limit 0.2‰', 'ckAlcoholSub': 'Stricter than in Lithuania. Safest is not to drink at all.',
+  'ckSpeed': 'Speed: 50 / 90 / 120 / 140 km/h', 'ckSpeedSub': 'Towns 50, outside towns 90, expressways (S) up to 120, motorways 140. Many speed cameras.',
+  'ckBags': 'Shopping bags', 'ckBagsSub': 'Bags cost extra in shops.',
+  'ckCard': 'Pay in złoty', 'ckCardSub': 'At the card terminal choose PLN, not EUR, or the rate is 3–7% worse.',
+  'ckDeposit': 'Deposit bottles', 'ckDepositSub': 'Bottles and cans carry a deposit in Poland. You only get it back by returning them in Poland.',
+  'ckLimits': 'How much you can bring back', 'ckLimitsSub': 'EU guide levels for personal use: 800 cigarettes, 1 kg tobacco, 10 l spirits, 20 l intermediate products, 90 l wine (up to 60 l sparkling), 110 l beer. Fuel: in the tank plus up to 10 l in a can. More may be treated as trade by customs.',
+  'ckLimitsLink': 'Customs information', 'ck112': 'Emergency number 112', 'ck112Sub': 'Works in Poland too. Below is a card in Polish if you need help.',
+  'ckNote': 'General information, not legal advice. Rules can change.',
+  'sosOpen': 'SOS card in Polish', 'sosCall': 'Call 112',
+  'sosTranslation': 'In English: “I need help. Please call 112. I’m from Lithuania and don’t speak Polish.”',
+
+  // Watchlist
+  'watchTitle': 'Watchlist', 'watchHome': 'Watchlist', 'watchHomeSub': 'We’ll tell you when it’s on promotion',
+  'watchHomeHits': 'Deals this week: {n}',
+  'watchSub': 'Add what you buy regularly. When it goes on promotion in a Polish shop, we’ll let you know.',
+  'watchAlerts': 'Notify me about new deals', 'watchAlertsSub': 'Your phone checks a few times a day. Nothing is sent to a server.',
+  'watchNoPermission': 'Notifications are not allowed. Turn them on in your phone’s settings.',
+  'watchHint': 'E.g. coffee, Pampers, Jacobs', 'watchCustom': 'Watch “{q}”', 'watchCustomSub': 'We’ll look for these words in deal names (brands work too)',
+  'watchEmpty': 'You’re not watching anything yet.', 'watchNoDeals': 'No deals right now', 'watchAdd': 'Watch for deals', 'watchAdded': 'Watching: {name}',
+  'alertOne': 'Deal on something you watch', 'alertMany': 'Deals on things you watch: {n}',
+
+  // History
+  'histTitle': 'Savings', 'histYear': 'Saved in {y}', 'histYearSub': 'Trips: {n} · spent in Poland {v}',
+  'histHow': 'Only items with a known Lithuanian price count, minus fuel for the drive.',
+  'histEmpty': 'When you’re back from Poland, tap “Done shopping” in the trip plan and your savings will show here.',
+  'histTrips': 'Trips', 'histHome': 'Saved this year: {v}',
+  'finishTitle': 'Done shopping', 'finishOpen': 'Done shopping',
+  'finishNone': 'You haven’t ticked any items as bought yet.', 'finishMarkAll': 'I bought everything',
+  'finishSub': 'Items bought: {n}. They’ll be saved in your history and removed from the list.',
+  'finishReceipt': 'Receipt total (optional)', 'finishSpent': 'Spent', 'finishSaving': 'Saved on items',
+  'finishTravel': 'Fuel for the drive', 'finishNet': 'Total', 'finishSave': 'Save trip',
+  'finishNoLt': 'We don’t know these items’ Lithuanian prices, so we can’t work out the saving.',
+
+  // Reference prices
+  'unitPiece': 'pc', 'refUse': 'Use',
+  'refPl': 'Usual price in Poland ~{v}/{u} ({src}, e.g. {ex} – {p})',
+  'refLt': 'Usually in Lithuania ~{v}/{u} ({src})',
+  'refLtPack': 'Usually in Lithuania ~{v}/{u} ({src}) – for this amount ≈ {p}',
+  'refUsualPl': 'usual price ({src})', 'planVsLt': 'In Lithuania {lt} – you save {v}', 'planVsLtWorse': 'In Lithuania {lt} – cheaper there by {v}',
+
 };
+
+/// Translation without a BuildContext (notifications, background work).
+String tr(Lang lang, String key, [Map<String, Object> vars = const {}]) {
+  var v = (lang == Lang.lt ? _lt : _en)[key] ?? _lt[key] ?? key;
+  vars.forEach((k, val) => v = v.replaceAll('{$k}', '$val'));
+  return v;
+}
 
 extension I18n on BuildContext {
   Lang get lang => AppScope.of(this).lang;

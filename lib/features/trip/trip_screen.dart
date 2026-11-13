@@ -11,6 +11,7 @@ import '../../data/geo.dart';
 import '../../services/fuel.dart';
 import '../../main.dart';
 import '../../widgets/ui.dart';
+import '../plan/plan_screen.dart';
 
 /// Trip economics. Every number shown is derived here from user inputs + live NBP rate.
 class TripCalc {
@@ -482,13 +483,9 @@ class _Result extends StatelessWidget {
         ],
         const SizedBox(height: 18),
         BigButton(
-          label: context.s('resultMaps'),
+          label: context.s('planTitle'),
           icon: Icons.map_rounded,
-          onPressed: () => launchUrl(
-            Uri.parse('https://www.google.com/maps/dir/?api=1&origin=${Uri.encodeComponent('${s.origin.name}, Lithuania')}'
-                '&destination=${Uri.encodeComponent('${s.dest.name}, Poland')}&travelmode=driving'),
-            mode: LaunchMode.externalApplication,
-          ),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlanScreen())),
         ),
         const SizedBox(height: 10),
         BigButton(label: context.s('resultEdit'), icon: Icons.tune_rounded, kind: BtnKind.secondary, onPressed: onEdit),

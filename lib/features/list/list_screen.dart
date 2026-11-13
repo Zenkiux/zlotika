@@ -11,6 +11,7 @@ import 'deal_pick.dart';
 import '../scan/scan_screen.dart';
 import 'add_item_screen.dart';
 import 'item_sheet.dart';
+import '../plan/plan_screen.dart';
 
 class ListScreen extends StatelessWidget {
   const ListScreen({super.key});
@@ -33,6 +34,11 @@ class ListScreen extends StatelessWidget {
                   children: [
                     Row(children: [
                       Expanded(child: Text(context.s('listTitle'), style: context.tt.headlineMedium)),
+                      IconButton.filledTonal(
+                        tooltip: context.s('planTitle'),
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlanScreen())),
+                        icon: const Icon(Icons.alt_route_rounded),
+                      ),
                       if (s.items.any((e) => e.checked))
                         TextButton(onPressed: s.clearChecked, child: Text(context.s('listClearChecked'), style: context.tt.labelMedium)),
                     ]),
@@ -146,15 +152,17 @@ class _ItemRow extends StatelessWidget {
     final saving = s.itemSaving(item);
     final done = item.checked;
 
+    final pl = s.plFor(item), lt = s.ltFor(item);
+    String approx(Est e) => e.kind == PriceKind.ref || e.kind == PriceKind.last ? '≈ ' : '';
     Widget priceLine() {
-      if (!item.hasPrices && item.plPrice != null) {
+      if (pl != null && lt == null) {
         final shop = item.chain == null ? null : chainById(item.chain!)?.name;
         return Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          Text([zl(item.plPrice!, lang), ?shop].join(' · '), style: context.tt.bodyMedium),
+          Text(['${approx(pl)}${zl(pl.price, lang)}', ?shop].join(' · '), style: context.tt.bodyMedium),
           Pill(context.s('itemNeedLt'), fg: Brand.ink, bg: Brand.yellow, icon: Icons.edit_rounded),
         ]);
       }
-      if (!item.hasPrices) {
+      if (pl == null || lt == null) {
         final m = s.dealsFor(item.plName);
         if (m.isNotEmpty) return DealCountPill(m);
         return Pill(context.s('itemAddPrices'), fg: Brand.ink, bg: Brand.yellow, icon: Icons.edit_rounded);
@@ -162,7 +170,7 @@ class _ItemRow extends StatelessWidget {
       final good = (saving ?? 0) > 0.009;
       final bad = (saving ?? 0) < -0.009;
       return Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Text('${zl(item.plPrice!, lang)} · ${eur(item.ltPrice!, lang)} LT', style: context.tt.bodyMedium),
+        Text('${approx(pl)}${zl(pl.price, lang)} · ${approx(lt)}${eur(lt.price, lang)} LT', style: context.tt.bodyMedium),
         if (saving != null)
           Pill(
             good ? context.s('itemSaving', {'v': eur(saving, lang)}) : bad ? context.s('itemCheaperLt', {'v': eur(-saving, lang)}) : context.s('itemSame'),

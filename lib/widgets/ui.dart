@@ -143,7 +143,7 @@ class SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(4, 28, 4, 12),
-        child: Row(children: [Expanded(child: Text(text, style: context.tt.titleLarge)), if (trailing != null) trailing!]),
+        child: Row(children: [Expanded(child: Text(text, style: context.tt.titleLarge)), ?trailing]),
       );
 }
 

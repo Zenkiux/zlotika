@@ -6,6 +6,8 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/geo.dart';
 import '../../widgets/ui.dart';
+import '../history/history_screen.dart';
+import '../watch/watch_screen.dart';
 
 /// Equal-width segmented choice with large targets.
 class Segmented<T> extends StatelessWidget {
@@ -164,6 +166,8 @@ class MoreScreen extends StatelessWidget {
               onChanged: (v) => s.update((x) => x.cardFeePct = v),
             ),
           ),
+          link(Icons.savings_rounded, context.s('histTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()))),
+          link(Icons.notifications_active_rounded, context.s('watchTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WatchScreen()))),
           link(Icons.dataset_rounded, context.s('aboutData'),
               () => info(context.s('aboutData'), [context.s('dataNbp'), context.s('dataOff'), context.s('dataCalendar'), context.s('dataDistance'), context.s('dataPrices')])),
           link(Icons.lock_rounded, context.s('privacy'), () => info(context.s('privacy'), [context.s('privacyText')])),

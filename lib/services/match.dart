@@ -64,3 +64,16 @@ List<Deal> matchDeals(String plName, Iterable<Deal> deals, {int max = 12, bool f
   });
   return out.take(max).toList();
 }
+
+/// Free-text watch ("Jacobs Krönung", "Pampers 4"): every word of 3+ letters
+/// (or any number) appears somewhere in the deal name.
+List<Deal> matchLoose(String query, Iterable<Deal> deals, {int max = 12}) {
+  final keys = _words(query).where((w) => w.length >= 3 || RegExp(r'^\d+$').hasMatch(w)).map(_stem).toList();
+  if (keys.isEmpty) return const [];
+  final out = [
+    for (final d in deals)
+      if (keys.every((k) => _words(d.name).any((w) => w.startsWith(k)))) d
+  ];
+  out.sort((a, b) => a.ocr != b.ocr ? (a.ocr ? 1 : -1) : a.price.compareTo(b.price));
+  return out.take(max).toList();
+}

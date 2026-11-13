@@ -11,6 +11,7 @@ import 'features/list/list_screen.dart';
 import 'features/more/more_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'features/trip/trip_screen.dart';
+import 'services/alerts.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,7 +19,10 @@ Future<void> main() async {
   final state = AppState(prefs);
   runApp(AppScope(state: state, child: const ZlotikaApp()));
   state.refreshRate();
-  state.refreshFeed();
+  state.loadStores();
+  state.loadPrices();
+  await Alerts.init(state);
+  state.refreshFeed().then((_) => Alerts.check(state));
 }
 
 /// Lets any screen switch the bottom tab (e.g. Home → Trip).
@@ -75,7 +79,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       final r = s.rate;
       if (r == null || DateTime.now().difference(r.fetchedAt).inHours >= 3) s.refreshRate();
       final f = s.feed;
-      if (f == null || DateTime.now().difference(f.generatedAt).inHours >= 6) s.refreshFeed();
+      if (f == null || DateTime.now().difference(f.generatedAt).inHours >= 6) s.refreshFeed().then((_) => Alerts.check(s));
     }
   }
 

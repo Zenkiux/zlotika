@@ -9,7 +9,11 @@ import '../../core/theme.dart';
 import '../../data/calendar.dart';
 import '../../main.dart';
 import '../../widgets/ui.dart';
+import '../../core/hours.dart';
 import '../convert/convert_screen.dart';
+import '../plan/plan_screen.dart';
+import '../watch/watch_screen.dart';
+import '../history/history_screen.dart';
 import '../scan/scan_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -70,8 +74,16 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 22),
             _TodayPanel(now: _now),
             const SizedBox(height: 14),
-            _TripCard(onTap: () => shellTab.value = 3),
+            _TripCard(onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlanScreen()))),
             const SizedBox(height: 12),
+            _ActionRow(
+              icon: Icons.directions_car_rounded,
+              iconColor: Brand.ink,
+              iconBg: Brand.yellow,
+              title: context.s('actionTrip'),
+              subtitle: context.s('actionTripSub'),
+              onTap: () => shellTab.value = 3,
+            ),
             _ActionRow(
               icon: Icons.local_offer_rounded,
               iconColor: Colors.white,
@@ -80,6 +92,26 @@ class _HomeScreenState extends State<HomeScreen> {
               subtitle: s.deals.isEmpty ? context.s('dealsTabLeaflets') : context.s('homeDealsSub', {'n': s.deals.length}),
               onTap: () => shellTab.value = 1,
             ),
+            _ActionRow(
+              icon: Icons.notifications_active_rounded,
+              iconColor: Brand.ink,
+              iconBg: Brand.yellow,
+              title: context.s('watchHome'),
+              subtitle: () {
+                final n = s.watch.fold<int>(0, (a, w) => a + s.watchDeals(w).length);
+                return n > 0 ? context.s('watchHomeHits', {'n': n}) : context.s('watchHomeSub');
+              }(),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WatchScreen())),
+            ),
+            if (s.trips.isNotEmpty)
+              _ActionRow(
+                icon: Icons.savings_rounded,
+                iconColor: Colors.white,
+                iconBg: Brand.green,
+                title: context.s('histHome', {'v': eurSigned(s.yearTotals(_now.year).saved, lang)}),
+                subtitle: context.s('histYearSub', {'n': s.yearTotals(_now.year).count, 'v': eur(s.yearTotals(_now.year).spent, lang)}),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+              ),
             _ActionRow(
               icon: Icons.shopping_bag_rounded,
               iconColor: Brand.ink,
@@ -162,7 +194,7 @@ class _TodayPanel extends StatelessWidget {
         Divider(color: c.line),
         _FactRow(
           icon: Icons.schedule_rounded,
-          title: context.s('timeThere', {'time': hhmm(polishTime(now))}),
+          title: context.s('timeThere', {'time': hhmm(plNow(now))}),
           subtitle: context.s('timeThereSub'),
         ),
       ]),
@@ -208,9 +240,9 @@ class _TripCard extends StatelessWidget {
         child: Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(context.s('actionTrip'), style: context.tt.headlineSmall!.copyWith(color: Brand.ink)),
+              Text(context.s('planHome'), style: context.tt.headlineSmall!.copyWith(color: Brand.ink)),
               const SizedBox(height: 4),
-              Text(context.s('actionTripSub'), style: context.tt.bodyLarge!.copyWith(color: Brand.ink.withValues(alpha: .75))),
+              Text(context.s('planHomeSub'), style: context.tt.bodyLarge!.copyWith(color: Brand.ink.withValues(alpha: .75))),
             ]),
           ),
           const SizedBox(width: 12),
