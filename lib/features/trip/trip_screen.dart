@@ -99,7 +99,7 @@ class TripScreen extends StatelessWidget {
 
 // ───────────────────────────── Setup: one question per screen
 
-enum _Q { from, to, shops, cards, day, car }
+enum _Q { from, to, shops, cards, home, day, car }
 
 class _Setup extends StatefulWidget {
   const _Setup({super.key});
@@ -116,6 +116,7 @@ class _SetupState extends State<_Setup> {
         _Q.to,
         _Q.shops,
         if (s.tripChains.any((c) => chainById(c)?.card != null)) _Q.cards,
+        _Q.home,
         _Q.day,
         _Q.car,
       ];
@@ -166,13 +167,14 @@ class _SetupState extends State<_Setup> {
               _Q.to => [_title(context, 'tripTo'), _DestPicker(onPicked: next)],
               _Q.shops => [_title(context, 'tripShops', 'tripShopsSub'), const _ShopsPicker()],
               _Q.cards => [_title(context, 'tripCards', 'tripCardsSub'), const _CardsPicker()],
+              _Q.home => [_title(context, 'tripHome', 'tripHomeSub'), _LtShopPicker(onPicked: next)],
               _Q.day => [_title(context, 'tripDay', 'tripDaySub'), _DayPicker(onPicked: next)],
               _Q.car => [_title(context, 'tripCar'), const _CarForm()],
             },
           ),
         ),
       ),
-      if (q != _Q.from && q != _Q.to && q != _Q.day)
+      if (q != _Q.from && q != _Q.to && q != _Q.day && q != _Q.home)
         Container(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line))),
@@ -321,6 +323,34 @@ class _CardsPicker extends StatelessWidget {
           leading: const Icon(Icons.credit_card_rounded),
           onTap: () => s.toggleCard(ch.id),
         ),
+    ]);
+  }
+}
+
+String _ltShopName(BuildContext context, String id) => switch (id) { 'rimi' => 'Rimi', 'cheapest' => context.s('tripHomeCheapest'), _ => 'Maxima' };
+
+/// Where the shopper buys at home: savings are compared with that shop's prices.
+class _LtShopPicker extends StatelessWidget {
+  const _LtShopPicker({required this.onPicked});
+  final VoidCallback onPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return Column(children: [
+      for (final id in AppState.ltShops)
+        ChoiceRow(
+          title: _ltShopName(context, id),
+          subtitle: id == 'cheapest' ? context.s('tripHomeCheapestSub') : null,
+          selected: s.ltShop == id,
+          leading: Icon(id == 'cheapest' ? Icons.savings_rounded : Icons.storefront_rounded, color: Brand.yellow),
+          onTap: () {
+            s.update((x) => x.ltShop = id);
+            onPicked();
+          },
+        ),
+      const SizedBox(height: 8),
+      Text(context.s('tripHomeMore'), style: context.tt.bodySmall),
     ]);
   }
 }
@@ -657,6 +687,9 @@ class _TripFacts extends StatelessWidget {
               (s.travellers > 1 ? context.s('tripCarPeople', {'n': s.travellers}) : ''),
           () => _editSheet(context, 'tripCar', (_) => const _CarForm()),
         ),
+        Divider(color: c.line, height: 1),
+        row(Icons.storefront_rounded, context.s('tripHomeRow'), _ltShopName(context, s.ltShop),
+            () => _editSheet(context, 'tripHome', (close) => _LtShopPicker(onPicked: close), sub: 'tripHomeSub')),
         if (cardChains.isNotEmpty) ...[
           Divider(color: c.line, height: 1),
           row(Icons.credit_card_rounded, context.s('tripCardsRow'), held.isEmpty ? context.s('tripCardsNone') : held.join(', '),

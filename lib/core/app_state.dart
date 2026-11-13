@@ -162,6 +162,11 @@ class AppState extends ChangeNotifier {
   final Set<String> cards = {}; // chains whose loyalty card / app the shopper has
   String? tripDate; // yyyy-mm-dd, Polish calendar
 
+  /// Where the shopper buys at home, so savings compare with *their* shop:
+  /// 'maxima' (Barbora prices), 'rimi', or 'cheapest' of the two.
+  String ltShop = 'maxima';
+  static const ltShops = ['maxima', 'rimi', 'cheapest'];
+
   bool inTrip(String? chain) => chain != null && tripChains.contains(chain);
 
   /// The trip day; a past or unset date becomes the next day shops are open.
@@ -278,7 +283,14 @@ class AppState extends ChangeNotifier {
   /// The chain a reference price was read from, when it is a chain with shops ('Rossmann').
   static String? refChain(RefPrice r) => chainById(r.source.toLowerCase())?.id;
 
-  RefPrice? ltRef(ListItem i) => _ref(priceFeed?.lt, i.plName);
+  RefPrice? ltRef(ListItem i) {
+    final maxima = _ref(priceFeed?.lt, i.plName), rimi = _ref(priceFeed?.ltRimi, i.plName);
+    return switch (ltShop) {
+      'rimi' => rimi ?? maxima,
+      'cheapest' => (maxima == null || (rimi != null && rimi.unitMedian < maxima.unitMedian)) ? rimi : maxima,
+      _ => maxima ?? rimi,
+    };
+  }
 
   /// Usual Polish price — only from a shop on this trip (an online-only source counts anywhere).
   RefPrice? plRef(ListItem i) {
@@ -534,6 +546,7 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(((j['cards'] as List?) ?? []).cast<String>());
       tripDate = j['tripDate'] as String?;
+      ltShop = j['ltShop'] as String? ?? 'maxima';
       items
         ..clear()
         ..addAll(((j['items'] as List?) ?? []).map((e) => ListItem.fromJson(e as Map<String, dynamic>)));
@@ -584,7 +597,7 @@ class AppState extends ChangeNotifier {
           'refuelLitres': refuelLitres, 'travellers': travellers, 'ltFuelPrice': ltFuelPrice, 'plFuelPrice': plFuelPrice,
           'cardFeePct': cardFeePct, 'items': items.map((e) => e.toJson()).toList(), 'rate': rate?.toJson(), 'priceFixes': priceFixes,
           'storeChoice': storeChoice,
-          'tripReady': tripReady, 'tripChains': tripChains, 'cards': cards.toList(), 'tripDate': tripDate,
+          'tripReady': tripReady, 'tripChains': tripChains, 'cards': cards.toList(), 'tripDate': tripDate, 'ltShop': ltShop,
           'watch': watch.map((w) => w.toJson()).toList(), 'alerted': alerted.toList(), 'alertsOn': alertsOn,
           'trips': trips.map((t) => t.toJson()).toList(),
           'priceMemory': priceMemory.map((k, v) => MapEntry(k, {'pl': v.pl, 'chain': v.chain, 'date': v.date})),
@@ -631,6 +644,7 @@ class AppState extends ChangeNotifier {
     tripChains.clear();
     cards.clear();
     tripDate = null;
+    ltShop = 'maxima';
     priceFixes.clear();
     priceMemory.clear();
     storeChoice.clear();

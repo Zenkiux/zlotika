@@ -5,6 +5,7 @@ import 'package:zlotika/services/deals.dart';
 import 'package:zlotika/services/fuel.dart';
 import 'package:zlotika/services/nbp.dart';
 import 'package:zlotika/services/open_prices.dart';
+import 'package:zlotika/services/prices.dart';
 
 Future<AppState> _state() async {
   SharedPreferences.setMockInitialValues({});
@@ -48,5 +49,17 @@ void main() {
     expect(OpenPrices.osmRef('osm:w1456108900'), (1456108900, 'WAY'));
     expect(OpenPrices.osmRef('osm:n42'), (42, 'NODE'));
     expect(OpenPrices.osmRef('pepco:123'), isNull);
+  });
+
+  test("savings compare with the shopper's own Lithuanian shop", () async {
+    final s = await _state();
+    RefPrice r(String src, double v) => RefPrice(source: src, unit: 'kg', n: 5, unitMin: v, unitMedian: v, pkgMedian: v / 5, exName: 'x', exPrice: v / 5, exUnitPrice: v, exUrl: '');
+    s.priceFeed = PriceFeed({'Masło': r('Barbora', 16.0)}, const {}, null, ltRimi: {'Masło': r('Rimi', 14.95)});
+    final i = ListItem(id: 'b', name: 'Sviestas', plName: 'Masło');
+    expect(s.ltRef(i)!.source, 'Barbora');
+    s.ltShop = 'rimi';
+    expect(s.ltRef(i)!.source, 'Rimi');
+    s.ltShop = 'cheapest';
+    expect(s.ltRef(i)!.unitMedian, 14.95);
   });
 }

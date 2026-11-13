@@ -238,7 +238,7 @@ class _ItemSheetState extends State<_ItemSheet> {
           onChanged: (_) => setState(() {}),
         ),
         if (ltRef != null && parseAmount(_lt.text) == null)
-          note(context.s(ltEst == null ? 'refLt' : 'refLtPack', {'v': eur(ltRef.unitMedian, lang), 'u': unitName(ltRef.unit), 'src': ltRef.source, 'p': eur(ltEst?.price ?? 0, lang)})),
+          note(context.s(ltEst == null ? 'refLt' : 'refLtPack', {'v': eur(ltRef.unitMedian, lang), 'u': unitName(ltRef.unit), 'src': ltRef.source == 'Barbora' ? 'Maxima' : ltRef.source, 'p': eur(ltEst?.price ?? 0, lang)})),
         const SizedBox(height: 18),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),

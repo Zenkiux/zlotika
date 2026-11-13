@@ -216,6 +216,9 @@ const _lt = <String, String>{
   'itemElsewhere': 'Kitur pigiau šią savaitę', 'itemAddStop': 'Pridėti į kelionę', 'itemAddedStop': '{chain} pridėta į kelionę',
   'dealsMine': 'Mano parduotuvės', 'dealsNotInTrip': 'Pridėta: {name}. {chain} nėra jūsų kelionėje.', 'dealsAddToTrip': 'Pridėti',
   'moreTools': 'Įrankiai',
+  'tripHome': 'Kur dažniausiai perkate Lietuvoje?', 'tripHomeSub': 'Sutaupymą skaičiuosime lygindami su šios parduotuvės kainomis.',
+  'tripHomeCheapest': 'Kur pigiau', 'tripHomeCheapestSub': 'Lyginsime su pigesne iš Maxima ir Rimi',
+  'tripHomeMore': 'Kainos – iš Maxima (Barbora) ir Rimi internetinių parduotuvių. Lidl, IKI ir Norfa – netrukus.', 'tripHomeRow': 'Lietuvoje perkate',
   'pcTitle': 'Kiek kainuoja?', 'pcHint': 'Pvz., sviestas, kava, Pampers', 'pcNone': '{shop}: kainos šią savaitę nežinome',
   'pcLt': 'Lietuvoje ≈ {v}', 'pcSave': 'Lietuvoje ≈ {v} · sutaupysite {s}', 'pcNoSave': 'Lietuvoje ≈ {v} · ten pigiau {s}', 'pcNothing': 'Nieko neradome. Pabandykite kitą žodį.',
   // Report a price (Open Prices)
@@ -447,6 +450,9 @@ const _en = <String, String>{
   'itemElsewhere': 'Cheaper elsewhere this week', 'itemAddStop': 'Add to trip', 'itemAddedStop': '{chain} added to your trip',
   'dealsMine': 'My shops', 'dealsNotInTrip': 'Added: {name}. {chain} isn’t on your trip.', 'dealsAddToTrip': 'Add',
   'moreTools': 'Tools',
+  'tripHome': 'Where do you usually shop in Lithuania?', 'tripHomeSub': 'We work out your saving against that shop’s prices.',
+  'tripHomeCheapest': 'Wherever it’s cheaper', 'tripHomeCheapestSub': 'We compare with the cheaper of Maxima and Rimi',
+  'tripHomeMore': 'Prices from the Maxima (Barbora) and Rimi online shops. Lidl, IKI and Norfa coming soon.', 'tripHomeRow': 'You shop in Lithuania at',
   'pcTitle': 'How much is it?', 'pcHint': 'E.g. butter, coffee, Pampers', 'pcNone': '{shop}: no price known this week',
   'pcLt': 'In Lithuania ≈ {v}', 'pcSave': 'In Lithuania ≈ {v} · you save {s}', 'pcNoSave': 'In Lithuania ≈ {v} · cheaper there by {s}', 'pcNothing': 'Nothing found. Try another word.',
   // Report a price (Open Prices)

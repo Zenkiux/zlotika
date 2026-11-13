@@ -38,8 +38,9 @@ class RefPrice {
 }
 
 class PriceFeed {
-  PriceFeed(this.lt, this.pl, this.generatedAt);
-  final Map<String, RefPrice> lt, pl; // keyed by the Polish shelf name (Term.pl)
+  PriceFeed(this.lt, this.pl, this.generatedAt, {this.ltRimi = const {}});
+  final Map<String, RefPrice> lt, pl; // keyed by the Polish shelf name (Term.pl); lt = Maxima (Barbora)
+  final Map<String, RefPrice> ltRimi; // Rimi online shop
   final DateTime? generatedAt;
 
   static Map<String, RefPrice> _side(Object? o) =>
@@ -47,7 +48,7 @@ class PriceFeed {
 
   static PriceFeed parse(String body) {
     final j = jsonDecode(body) as Map<String, dynamic>;
-    return PriceFeed(_side(j['lt']), _side(j['pl']), DateTime.tryParse(j['generatedAt'] as String? ?? ''));
+    return PriceFeed(_side(j['lt']), _side(j['pl']), DateTime.tryParse(j['generatedAt'] as String? ?? ''), ltRimi: _side(j['ltRimi']));
   }
 
   static Future<String> bundled() => rootBundle.loadString('assets/data/prices.json');
