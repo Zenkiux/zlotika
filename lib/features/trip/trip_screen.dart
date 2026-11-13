@@ -16,6 +16,10 @@ import '../../services/stores.dart';
 import '../../widgets/ui.dart';
 import '../history/history_screen.dart';
 import '../list/add_item_screen.dart';
+import '../list/deal_pick.dart' show shortDealName;
+import '../../data/dictionary.dart';
+import '../../services/deals.dart';
+import '../../services/match.dart';
 import '../plan/checklist_screen.dart';
 
 /// Trip economics. Every number shown is derived here from the trip, the list and the NBP rate.
@@ -499,6 +503,8 @@ class _Overview extends StatelessWidget {
             Expanded(child: Text(context.s('tripHeader'), style: context.tt.headlineMedium)),
           ]),
           const SizedBox(height: 16),
+          const _PriceCheck(),
+          const SizedBox(height: 12),
           const _TripFacts(),
           const SizedBox(height: 12),
           if (lawClosed) ...[
@@ -1180,4 +1186,111 @@ class _SourceLink extends StatelessWidget {
           label: Text(text, style: context.tt.bodyMedium!.copyWith(decoration: TextDecoration.underline)),
         ),
       );
+}
+
+
+/// "How much is it?": one word in, the price at your shops and what you save, right away.
+class _PriceCheck extends StatefulWidget {
+  const _PriceCheck();
+
+  @override
+  State<_PriceCheck> createState() => _PriceCheckState();
+}
+
+class _PriceCheckState extends State<_PriceCheck> {
+  final _q = TextEditingController();
+
+  @override
+  void dispose() {
+    _q.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final q = _q.text.trim();
+
+    // Dictionary words ("sviestas" → Masło), then brand / free-text matches in this trip's deals.
+    final rows = <({String title, String? pl, Deal? deal, ListItem probe})>[];
+    if (q.length >= 2) {
+      for (final t in searchTerms(q).take(3)) {
+        final probe = ListItem(id: '', name: lang == Lang.lt ? t.lt : t.en, plName: t.pl);
+        rows.add((title: probe.name, pl: t.pl, deal: s.dealOf(probe), probe: probe));
+      }
+      if (q.length >= 3) {
+        final seen = rows.map((r) => r.deal?.id).toSet();
+        for (final d in matchLoose(q, s.deals.where(s.dealUsable)).where((d) => !seen.contains(d.id)).take(3)) {
+          rows.add((title: shortDealName(d.name), pl: null, deal: d, probe: ListItem(id: '', name: shortDealName(d.name), plName: d.name, dealId: d.id)));
+        }
+      }
+    }
+
+    Widget row(({String title, String? pl, Deal? deal, ListItem probe}) r) {
+      final pl = s.plFor(r.probe);
+      final lt = s.ltFor(r.probe);
+      final saving = s.itemSaving(r.probe);
+      final shop = s.chainOf(r.probe);
+      final shopName = shop == null ? '' : chainById(shop)?.name ?? shop;
+      final plEur = pl == null ? null : s.toEur(pl.price);
+      final good = (saving ?? 0) > 0.009;
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(r.title, style: context.tt.titleMedium, maxLines: 2, overflow: TextOverflow.ellipsis),
+              if (pl == null)
+                Text(context.s('pcNone', {'shop': shopName}), style: context.tt.bodyMedium!.copyWith(color: c.text3))
+              else ...[
+                Text(
+                  '$shopName: ${pl.kind == PriceKind.deal ? '' : '≈ '}${zl(pl.price, lang)}${plEur == null ? '' : ' ≈ ${eur(plEur, lang)}'}'
+                  '${r.deal?.card == true ? ' · ${chainById(r.deal!.chain)?.card ?? ''}' : ''}',
+                  style: context.tt.bodyLarge,
+                ),
+                if (lt != null)
+                  Text(
+                    saving == null
+                        ? context.s('pcLt', {'v': eur(lt.price, lang)})
+                        : context.s(good ? 'pcSave' : 'pcNoSave', {'v': eur(lt.price, lang), 's': eur(saving.abs(), lang)}),
+                    style: context.tt.bodyMedium!.copyWith(color: saving == null ? c.text2 : good ? c.good : c.bad),
+                  ),
+              ],
+            ]),
+          ),
+          IconButton(
+            tooltip: context.s('listAdd'),
+            icon: const Icon(Icons.add_circle_rounded, color: Brand.yellow, size: 30),
+            onPressed: () {
+              s.addItem(ListItem(id: newId(), name: r.title, plName: r.pl ?? r.deal?.name, dealId: r.pl == null ? r.deal?.id : null));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.s('addAdded', {'name': r.title})), duration: const Duration(seconds: 2)));
+            },
+          ),
+        ]),
+      );
+    }
+
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(context.s('pcTitle'), style: context.tt.titleLarge),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _q,
+          textInputAction: TextInputAction.search,
+          style: context.tt.titleMedium,
+          decoration: InputDecoration(
+            hintText: context.s('pcHint'),
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: q.isEmpty ? null : IconButton(icon: const Icon(Icons.clear_rounded), onPressed: () => setState(_q.clear)),
+          ),
+          onChanged: (_) => setState(() {}),
+        ),
+        if (q.length >= 2 && rows.isEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(context.s('pcNothing'), style: context.tt.bodyMedium)),
+        for (final r in rows) row(r),
+      ]),
+    );
+  }
 }

@@ -216,6 +216,8 @@ const _lt = <String, String>{
   'itemElsewhere': 'Kitur pigiau šią savaitę', 'itemAddStop': 'Pridėti į kelionę', 'itemAddedStop': '{chain} pridėta į kelionę',
   'dealsMine': 'Mano parduotuvės', 'dealsNotInTrip': 'Pridėta: {name}. {chain} nėra jūsų kelionėje.', 'dealsAddToTrip': 'Pridėti',
   'moreTools': 'Įrankiai',
+  'pcTitle': 'Kiek kainuoja?', 'pcHint': 'Pvz., sviestas, kava, Pampers', 'pcNone': '{shop}: kainos šią savaitę nežinome',
+  'pcLt': 'Lietuvoje ≈ {v}', 'pcSave': 'Lietuvoje ≈ {v} · sutaupysite {s}', 'pcNoSave': 'Lietuvoje ≈ {v} · ten pigiau {s}', 'pcNothing': 'Nieko neradome. Pabandykite kitą žodį.',
   // Report a price (Open Prices)
   'itemReport': 'Pranešti kainą (nuotrauka)', 'repTitle': 'Pranešti kainą',
   'repWhy': 'Nufotografuokite kainos etiketę lentynoje. Kaina bus paskelbta Open Prices – atvirojoje kainų duomenų bazėje – ir rytoj ją matys visi Zlotika naudotojai.',
@@ -445,6 +447,8 @@ const _en = <String, String>{
   'itemElsewhere': 'Cheaper elsewhere this week', 'itemAddStop': 'Add to trip', 'itemAddedStop': '{chain} added to your trip',
   'dealsMine': 'My shops', 'dealsNotInTrip': 'Added: {name}. {chain} isn’t on your trip.', 'dealsAddToTrip': 'Add',
   'moreTools': 'Tools',
+  'pcTitle': 'How much is it?', 'pcHint': 'E.g. butter, coffee, Pampers', 'pcNone': '{shop}: no price known this week',
+  'pcLt': 'In Lithuania ≈ {v}', 'pcSave': 'In Lithuania ≈ {v} · you save {s}', 'pcNoSave': 'In Lithuania ≈ {v} · cheaper there by {s}', 'pcNothing': 'Nothing found. Try another word.',
   // Report a price (Open Prices)
   'itemReport': 'Report the price (photo)', 'repTitle': 'Report a price',
   'repWhy': 'Photograph the price tag on the shelf. The price goes to Open Prices, an open price database, and every Zlotika user will see it tomorrow.',

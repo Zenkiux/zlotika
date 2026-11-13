@@ -55,9 +55,11 @@ List<Deal> matchDeals(String plName, Iterable<Deal> deals, {int max = 12, bool f
     if (!keys.skip(1).every((k) => _has(all, k))) continue;
     out.add(d);
   }
-  // Read-from-website deals before leaflet-OCR ones, then cheapest per unit when known.
+  // Website and vision-read deals before plain-OCR ones (OCR misreads more), then cheapest
+  // per unit when known.
+  bool shaky(Deal d) => d.ocr && !d.vision;
   out.sort((a, b) {
-    if (a.ocr != b.ocr) return a.ocr ? 1 : -1;
+    if (shaky(a) != shaky(b)) return shaky(a) ? 1 : -1;
     final au = a.unitPrice, bu = b.unitPrice;
     if (au != null && bu != null && a.unit == b.unit) return au.compareTo(bu);
     return a.price.compareTo(b.price);
