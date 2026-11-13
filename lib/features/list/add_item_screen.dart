@@ -25,18 +25,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
     super.dispose();
   }
 
-  Future<void> _addTerm(Term t) async {
-    final s = AppScope.read(context);
+  /// Added straight away: the price is looked up in the trip's shops automatically.
+  void _addTerm(Term t) {
     final name = context.lang == Lang.lt ? t.lt : t.en;
-    final item = ListItem(id: newId(), name: name, plName: t.pl);
-    final matches = s.dealsFor(t.pl);
-    if (matches.isNotEmpty) {
-      // One question: which of this week's deals? The price is filled in from it.
-      final d = await pickDeal(context, context.s('matchPickTitle', {'name': name}), matches);
-      if (!mounted) return;
-      if (d != null) applyDeal(item, d, s.dealPrice(d));
-    }
-    s.addItem(item);
+    AppScope.read(context).addItem(ListItem(id: newId(), name: name, plName: t.pl));
     _done(name);
   }
 

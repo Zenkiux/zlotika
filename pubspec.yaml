@@ -40,6 +40,8 @@ dependencies:
   url_launcher: ^6.3.3
   flutter_local_notifications: ^23.0.1
   background_fetch: ^1.7.0
+  image_picker: ^1.2.4
+  flutter_secure_storage: ^11.2.0
 
 dev_dependencies:
   flutter_test:

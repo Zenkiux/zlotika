@@ -101,9 +101,23 @@ class DealCountPill extends StatelessWidget {
   }
 }
 
-/// Attaches a picked deal to a list line.
-void applyDeal(ListItem i, Deal d, double price) {
-  i.plPrice = price;
-  i.chain = d.chain;
+/// Attaches a picked deal to a list line. The price is read from the deal each time,
+/// so it only counts while that shop is on the trip.
+void applyDeal(ListItem i, Deal d) {
+  i.plPrice = null;
   i.dealId = d.id;
+}
+
+/// "Added" message; when the deal's shop is not on the trip, offers to add it as a stop.
+void showAddedSnack(BuildContext context, String name, String chain) {
+  final s = AppScope.read(context);
+  final m = ScaffoldMessenger.of(context);
+  final shop = chainById(chain)?.name ?? chain;
+  m
+    ..clearSnackBars()
+    ..showSnackBar(SnackBar(
+      duration: Duration(seconds: s.inTrip(chain) ? 2 : 6),
+      content: Text(s.inTrip(chain) ? context.s('addAdded', {'name': name}) : context.s('dealsNotInTrip', {'name': name, 'chain': shop})),
+      action: s.inTrip(chain) ? null : SnackBarAction(label: context.s('dealsAddToTrip'), textColor: Brand.yellow, onPressed: () => s.addTripChain(chain)),
+    ));
 }

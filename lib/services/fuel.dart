@@ -29,17 +29,22 @@ class FuelPrice {
   }
 }
 
-/// fuel.json from the daily collector: EU Weekly Oil Bulletin (LT + PL, €)
-/// and e-petrol.pl (PL, zł; Podlaskie when fresh).
+/// fuel.json from the daily collector: EU Weekly Oil Bulletin (LT + PL, €),
+/// e-petrol.pl (PL, zł; Podlaskie when fresh) and Poland's legal maximum price.
 class FuelFeed {
-  const FuelFeed({this.lt, this.pl, this.plRegion, this.plEu});
+  const FuelFeed({this.lt, this.pl, this.plRegion, this.plEu, this.plCap});
   final FuelPrice? lt, pl, plRegion, plEu;
+
+  /// Legal maximum pump price in Poland (zł/l, gross), set daily by the Minister of Energy.
+  /// No station may charge more. Covers Pb95 and diesel, not LPG.
+  final FuelPrice? plCap;
 
   factory FuelFeed.fromJson(Map<String, dynamic> j) => FuelFeed(
         lt: FuelPrice.fromJson(j['lt']),
         pl: FuelPrice.fromJson(j['pl']),
         plRegion: FuelPrice.fromJson(j['plRegion']),
         plEu: FuelPrice.fromJson(j['plEu']),
+        plCap: FuelPrice.fromJson(j['plCap'] is Map ? {...(j['plCap'] as Map<String, dynamic>), 'currency': 'PLN'} : null),
       );
 
   static Future<String> fetch({http.Client? client}) async {

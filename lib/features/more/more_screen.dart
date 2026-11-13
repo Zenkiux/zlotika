@@ -4,45 +4,12 @@ import '../../core/app_state.dart';
 import '../../core/format.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
-import '../../data/geo.dart';
+import '../convert/convert_screen.dart';
+import '../report/report_screen.dart' show OpenPricesAccount;
+import '../plan/checklist_screen.dart';
 import '../../widgets/ui.dart';
 import '../history/history_screen.dart';
 import '../watch/watch_screen.dart';
-
-/// Equal-width segmented choice with large targets.
-class Segmented<T> extends StatelessWidget {
-  const Segmented({super.key, required this.value, required this.options, required this.onChanged});
-  final T value;
-  final List<(T, String)> options;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.c;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(16)),
-      child: Row(children: [
-        for (final (v, label) in options)
-          Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(v),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                constraints: const BoxConstraints(minHeight: 48),
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                decoration: BoxDecoration(color: v == value ? Brand.yellow : Colors.transparent, borderRadius: BorderRadius.circular(12)),
-                child: Text(label,
-                    textAlign: TextAlign.center,
-                    style: context.tt.titleMedium!.copyWith(color: v == value ? Brand.ink : c.text2, fontWeight: v == value ? FontWeight.w700 : FontWeight.w500)),
-              ),
-            ),
-          ),
-      ]),
-    );
-  }
-}
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -129,36 +96,6 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           block(
-            context.s('setHome'),
-            Panel(
-              onTap: () => showSheet(
-                context,
-                (ctx) => ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                  children: [
-                    for (final o in origins)
-                      ChoiceRow(
-                        title: o.name,
-                        selected: s.originId == o.id,
-                        onTap: () {
-                          s.update((x) => x.originId = o.id);
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                  ],
-                ),
-              ),
-              padding: const EdgeInsets.all(16),
-              child: Row(children: [
-                const IconTile(Icons.home_rounded, size: 44),
-                const SizedBox(width: 14),
-                Expanded(child: Text(s.origin.name, style: context.tt.titleLarge)),
-                Icon(Icons.expand_more_rounded, color: c.text3),
-              ]),
-            ),
-          ),
-          block(
             context.s('setFee'),
             Segmented<double>(
               value: s.cardFeePct,
@@ -166,8 +103,16 @@ class MoreScreen extends StatelessWidget {
               onChanged: (v) => s.update((x) => x.cardFeePct = v),
             ),
           ),
-          link(Icons.savings_rounded, context.s('histTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen()))),
-          link(Icons.notifications_active_rounded, context.s('watchTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WatchScreen()))),
+          block(context.s('moreOpenPrices'), const OpenPricesAccount()),
+          Padding(padding: const EdgeInsets.only(left: 4, bottom: 10), child: Text(context.s('moreTools'), style: context.tt.titleMedium)),
+          link(Icons.savings_rounded, context.s('histTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
+              sub: s.trips.isEmpty ? null : context.s('histHome', {'v': eurSigned(s.yearTotals(DateTime.now().year).saved, lang)})),
+          link(Icons.notifications_active_rounded, context.s('watchTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WatchScreen())),
+              sub: context.s('watchHomeSub')),
+          link(Icons.currency_exchange_rounded, context.s('actionConvert'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConvertScreen())),
+              sub: s.rate == null ? null : context.s('convRate', {'r': fmtNum(s.rate!.mid, lang, digits: 4), 'd': s.rate!.date})),
+          link(Icons.fact_check_rounded, context.s('planChecklist'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChecklistScreen()))),
+          const SizedBox(height: 12),
           link(Icons.dataset_rounded, context.s('aboutData'),
               () => info(context.s('aboutData'), [context.s('dataNbp'), context.s('dataOff'), context.s('dataCalendar'), context.s('dataDistance'), context.s('dataPrices')])),
           link(Icons.lock_rounded, context.s('privacy'), () => info(context.s('privacy'), [context.s('privacyText')])),

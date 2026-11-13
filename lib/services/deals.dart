@@ -28,6 +28,10 @@ class Deal {
     this.url,
     this.category,
     this.ocr = false,
+    this.vision = false,
+    this.everyday = false,
+    this.crowd = false,
+    this.barcode,
     this.leaflet,
     this.page,
   });
@@ -42,6 +46,10 @@ class Deal {
   final String? validFrom, validTo; // yyyy-mm-dd
   final String? imageUrl, url, category;
   final bool ocr; // read automatically from a leaflet image — less certain
+  final bool vision; // read by the image-reading model (more reliable than plain OCR)
+  final bool everyday; // the chain's everyday (regular) price, not a short promotion
+  final bool crowd; // photographed on a shelf tag or receipt by a shopper (Open Prices)
+  final String? barcode;
   final String? leaflet; // id in the leaflet list
   final int? page;
 
@@ -65,6 +73,10 @@ class Deal {
         url: j['url'] as String?,
         category: j['category'] as String?,
         ocr: j['ocr'] as bool? ?? false,
+        vision: j['vision'] as bool? ?? false,
+        everyday: j['everyday'] as bool? ?? false,
+        crowd: j['crowd'] as bool? ?? false,
+        barcode: j['barcode'] as String?,
         leaflet: j['leaflet'] as String?,
         page: (j['page'] as num?)?.toInt(),
       );

@@ -11,7 +11,10 @@ import '../list/add_item_screen.dart' show newId;
 
 /// Barcode → product name via Open Food Facts, then add to the list.
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  const ScanScreen({super.key, this.pickOnly = false});
+
+  /// Just return the scanned barcode to the caller (e.g. when reporting a price).
+  final bool pickOnly;
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -32,6 +35,12 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<void> _handle(String code) async {
     if (_busy) return;
+    if (widget.pickOnly) {
+      HapticFeedback.mediumImpact();
+      _busy = true;
+      Navigator.pop(context, code);
+      return;
+    }
     setState(() => _busy = true);
     HapticFeedback.mediumImpact();
     await _controller.stop();

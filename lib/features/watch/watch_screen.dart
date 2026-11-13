@@ -148,9 +148,9 @@ class _WatchRow extends StatelessWidget {
                   final d = await pickDeal(context, context.s('matchPickTitle', {'name': item.name}), hits);
                   if (d == null || !context.mounted) return;
                   final li = ListItem(id: newId(), name: item.name, plName: item.term ? item.pl : null);
-                  applyDeal(li, d, s.dealPrice(d));
+                  applyDeal(li, d);
                   s.addItem(li);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.s('addAdded', {'name': item.name}))));
+                  showAddedSnack(context, item.name, d.chain);
                 },
           child: Row(children: [
             Expanded(

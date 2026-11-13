@@ -270,3 +270,38 @@ Future<T?> showSheet<T>(BuildContext context, Widget Function(BuildContext) buil
         child: builder(ctx),
       ),
     );
+
+/// Equal-width segmented choice with large targets.
+class Segmented<T> extends StatelessWidget {
+  const Segmented({super.key, required this.value, required this.options, required this.onChanged});
+  final T value;
+  final List<(T, String)> options;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.c;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(16)),
+      child: Row(children: [
+        for (final (v, label) in options)
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(v),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                constraints: const BoxConstraints(minHeight: 48),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                decoration: BoxDecoration(color: v == value ? Brand.yellow : Colors.transparent, borderRadius: BorderRadius.circular(12)),
+                child: Text(label,
+                    textAlign: TextAlign.center,
+                    style: context.tt.titleMedium!.copyWith(color: v == value ? Brand.ink : c.text2, fontWeight: v == value ? FontWeight.w700 : FontWeight.w500)),
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+}

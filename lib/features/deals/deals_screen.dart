@@ -11,7 +11,7 @@ import '../../data/dictionary.dart';
 import '../../services/deals.dart';
 import '../../widgets/ui.dart';
 import '../list/add_item_screen.dart' show newId;
-import '../more/more_screen.dart' show Segmented;
+import '../list/deal_pick.dart' show showAddedSnack;
 import 'leaflet_reader.dart';
 
 String agoText(BuildContext context, DateTime t) {
@@ -55,7 +55,8 @@ class DealsScreen extends StatefulWidget {
 
 class _DealsScreenState extends State<DealsScreen> {
   final _q = TextEditingController();
-  String? _chain;
+  String? _chain; // a single chain, or null
+  bool? _mine; // only the trip's shops; defaults to yes when a trip is set
   int _view = 0; // 0 deals, 1 leaflets
 
   @override
@@ -68,11 +69,13 @@ class _DealsScreenState extends State<DealsScreen> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = context.c;
-    final all = s.deals;
+    final all = s.deals.where((d) => !d.crowd).toList();
     final query = foldText(_q.text.trim());
     final present = {for (final d in all) d.chain};
+    final mine = _chain == null && (_mine ?? s.tripChains.isNotEmpty);
     final list = all.where((d) {
       if (_chain != null && d.chain != _chain) return false;
+      if (mine && !s.tripChains.contains(d.chain)) return false;
       if (query.isEmpty) return true;
       final tr = guessTerm(d.name);
       final hay = foldText('${d.name} ${tr?.lt ?? ''} ${tr?.en ?? ''} ${chainById(d.chain)?.name ?? ''}');
@@ -152,7 +155,15 @@ class _DealsScreenState extends State<DealsScreen> {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   children: [
-                    _ChainChip(label: context.s('dealsAll'), selected: _chain == null, onTap: () => setState(() => _chain = null)),
+                    if (s.tripChains.isNotEmpty)
+                      _ChainChip(label: context.s('dealsMine'), selected: mine, onTap: () => setState(() {
+                            _chain = null;
+                            _mine = true;
+                          })),
+                    _ChainChip(label: context.s('dealsAll'), selected: _chain == null && !mine, onTap: () => setState(() {
+                          _chain = null;
+                          _mine = false;
+                        })),
                     for (final ch in chains.where((x) => present.contains(x.id)))
                       _ChainChip(label: ch.name, color: ch.color, selected: _chain == ch.id, onTap: () => setState(() => _chain = _chain == ch.id ? null : ch.id)),
                   ],
@@ -382,11 +393,10 @@ class _DealSheetState extends State<_DealSheet> {
           label: context.s('dealAdd'),
           icon: Icons.add_shopping_cart_rounded,
           onPressed: () {
-            s.addItem(ListItem(id: newId(), name: tr ?? d.name, plName: d.name, qty: _qty, plPrice: price, chain: d.chain, dealId: d.id));
-            final m = ScaffoldMessenger.of(context);
-            final msg = context.s('addAdded', {'name': tr ?? d.name});
+            s.addItem(ListItem(id: newId(), name: tr ?? d.name, plName: d.name, qty: _qty, dealId: d.id));
+            final outer = Navigator.of(context).context;
             Navigator.pop(context);
-            m.showSnackBar(SnackBar(content: Text(msg)));
+            showAddedSnack(outer, tr ?? d.name, d.chain);
           },
         ),
         const SizedBox(height: 10),

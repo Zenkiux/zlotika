@@ -35,6 +35,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>To choose a photo of a price tag you want to report.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Kamera naudojama tik prekės brūkšniniam kodui nuskaityti. / The camera is only used to scan product barcodes.</string>
 	<key>UIApplicationSceneManifest</key>

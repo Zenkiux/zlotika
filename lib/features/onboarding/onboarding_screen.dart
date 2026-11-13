@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/app_state.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
-import '../../data/geo.dart';
 import '../../widgets/ui.dart';
-import '../more/more_screen.dart' show Segmented;
 
-/// Three short steps, no account: language → text size → home town.
+/// Two short steps, no account: language → text size. The trip asks the rest.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -28,7 +26,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             child: Row(children: [
-              for (var i = 0; i < 3; i++)
+              for (var i = 0; i < 2; i++)
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 220),
                   width: i == _step ? 28 : 8,
@@ -59,7 +57,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       const SizedBox(height: 28),
                       Segmented<Lang>(value: s.lang, options: const [(Lang.lt, 'Lietuvių'), (Lang.en, 'English')], onChanged: (v) => s.update((x) => x.lang = v)),
                     ],
-                  1 => [
+                  _ => [
                       Text(context.s('setText'), style: context.tt.displayMedium),
                       const SizedBox(height: 10),
                       Text(context.s('obTextSub'), style: context.tt.bodyLarge!.copyWith(color: c.text2)),
@@ -72,14 +70,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           leading: Text('Aa', style: TextStyle(fontFamily: 'Manrope', fontWeight: FontWeight.w800, fontSize: 18 * v, color: c.text)),
                           onTap: () => s.update((x) => x.textScale = v),
                         ),
-                    ],
-                  _ => [
-                      Text(context.s('obHome'), style: context.tt.headlineMedium),
-                      const SizedBox(height: 10),
-                      Text(context.s('obHomeSub'), style: context.tt.bodyLarge!.copyWith(color: c.text2)),
-                      const SizedBox(height: 22),
-                      for (final o in origins)
-                        ChoiceRow(title: o.name, selected: s.originId == o.id, onTap: () => s.update((x) => x.originId = o.id)),
                     ],
                 },
               ),
@@ -95,9 +85,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Expanded(
                 flex: 2,
                 child: BigButton(
-                  label: _step < 2 ? context.s('next') : context.s('obStart'),
-                  icon: _step < 2 ? Icons.arrow_forward_rounded : Icons.check_rounded,
-                  onPressed: () => _step < 2 ? setState(() => _step++) : s.update((x) => x.onboarded = true),
+                  label: _step < 1 ? context.s('next') : context.s('obStart'),
+                  icon: _step < 1 ? Icons.arrow_forward_rounded : Icons.check_rounded,
+                  onPressed: () => _step < 1 ? setState(() => _step++) : s.update((x) => x.onboarded = true),
                 ),
               ),
             ]),

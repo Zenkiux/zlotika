@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/calendar.dart' show isoDay, shopsOpen;
+import '../data/chains.dart' show chainById;
 import '../data/geo.dart';
+import 'hours.dart' show plNow;
 import '../services/deals.dart';
 import '../services/fuel.dart';
 import '../services/match.dart';
@@ -131,17 +134,74 @@ class AppState extends ChangeNotifier {
     return (_pick(fuelFeed?.plEu) != null && rate != null) ? fuelFeed!.plEu : null;
   }
 
+  /// Poland's legal maximum for the chosen fuel today (zł/l), if one applies (not for LPG).
+  double? get plCap => _pick(fuelFeed?.plCap);
+
+  /// Published Polish average, never above the legal maximum (stations can't charge more).
   double? get autoPlFuel {
     final p = autoPlSource;
     final v = _pick(p);
-    if (p == null || v == null) return null;
-    return p.currency == 'PLN' ? v : v * rate!.mid;
+    final avg = p == null || v == null ? null : (p.currency == 'PLN' ? v : v * rate!.mid);
+    final cap = plCap;
+    if (avg == null) return cap;
+    return cap != null && cap < avg ? cap : avg;
   }
+
+  /// True when the price shown for Poland is the legal maximum rather than an average.
+  bool get plFuelIsCap => plFuelPrice == null && plCap != null && autoPlFuel == plCap;
 
   /// What the calculator uses: the user's own price if typed, else the published average.
   double? get ltFuel => ltFuelPrice ?? autoLtFuel;
   double? get plFuel => plFuelPrice ?? autoPlFuel;
   double cardFeePct = 0;
+
+  // ── The trip: which shops, which loyalty cards, which day. Every price and
+  // saving in the app comes only from these shops.
+  bool tripReady = false; // the setup questions were answered
+  final List<String> tripChains = []; // chains the shopper will visit, main shop first
+  final Set<String> cards = {}; // chains whose loyalty card / app the shopper has
+  String? tripDate; // yyyy-mm-dd, Polish calendar
+
+  bool inTrip(String? chain) => chain != null && tripChains.contains(chain);
+
+  /// The trip day; a past or unset date becomes the next day shops are open.
+  DateTime get tripDay {
+    final p = plNow();
+    final today = DateTime(p.year, p.month, p.day);
+    final d = tripDate == null ? null : DateTime.tryParse(tripDate!);
+    if (d != null && !d.isBefore(today)) return d;
+    var x = p.hour >= 18 ? today.add(const Duration(days: 1)) : today;
+    for (var i = 0; i < 7 && !shopsOpen(x); i++) {
+      x = x.add(const Duration(days: 1));
+    }
+    return x;
+  }
+
+  /// Chains with a shop in the destination town (all known chains if shops aren't loaded).
+  Set<String> get chainsInTown => storeFeed?.chainsIn(destId) ?? {};
+
+  void setDest(String id) => update((s) {
+        s.destId = id;
+        final here = s.chainsInTown;
+        if (here.isNotEmpty) s.tripChains.retainWhere(here.contains);
+      });
+
+  void toggleTripChain(String chain) => update((s) => s.tripChains.contains(chain) ? s.tripChains.remove(chain) : s.tripChains.add(chain));
+  void addTripChain(String chain) => update((s) {
+        if (!s.tripChains.contains(chain)) s.tripChains.add(chain);
+      });
+  void toggleCard(String chain) => update((s) => s.cards.contains(chain) ? s.cards.remove(chain) : s.cards.add(chain));
+
+  /// A deal counts for this trip: one of the trip's shops, valid that day, and the
+  /// shopper has the card if the price needs one.
+  bool dealUsable(Deal d) {
+    if (!tripChains.contains(d.chain)) return false;
+    if (d.card == true && !cards.contains(d.chain)) return false;
+    final day = isoDay(tripDay);
+    if (d.validFrom != null && d.validFrom!.compareTo(day) > 0) return false;
+    if (d.validTo != null && d.validTo!.compareTo(day) < 0) return false;
+    return true;
+  }
 
   // List
   final List<ListItem> items = [];
@@ -154,7 +214,7 @@ class AppState extends ChangeNotifier {
 
   void _remember(ListItem i) {
     if (i.plPrice == null) return;
-    priceMemory[_memKey(i.name)] = (pl: i.plPrice!, chain: i.chain, date: DateTime.now().toIso8601String().substring(0, 10));
+    priceMemory[_memKey(i.name)] = (pl: i.plPrice!, chain: chainOf(i), date: DateTime.now().toIso8601String().substring(0, 10));
   }
 
   // Watchlist and alerts
@@ -162,7 +222,7 @@ class AppState extends ChangeNotifier {
   final Set<String> alerted = {}; // deal ids the shopper was already told about
   bool alertsOn = false;
 
-  List<Deal> watchDeals(WatchItem w) => w.term ? dealsFor(w.pl) : matchLoose(w.pl, deals);
+  List<Deal> watchDeals(WatchItem w) => w.term ? dealsAnywhere(w.pl) : matchLoose(w.pl, deals);
   bool isWatched(String pl) => watch.any((w) => w.pl.toLowerCase() == pl.toLowerCase());
 
   void addWatch(WatchItem w) => update((s) {
@@ -215,8 +275,18 @@ class AppState extends ChangeNotifier {
     return (r == null || feedConfig.disabledPriceSources.contains(r.source.toLowerCase())) ? null : r;
   }
 
+  /// The chain a reference price was read from, when it is a chain with shops ('Rossmann').
+  static String? refChain(RefPrice r) => chainById(r.source.toLowerCase())?.id;
+
   RefPrice? ltRef(ListItem i) => _ref(priceFeed?.lt, i.plName);
-  RefPrice? plRef(ListItem i) => _ref(priceFeed?.pl, i.plName);
+
+  /// Usual Polish price — only from a shop on this trip (an online-only source counts anywhere).
+  RefPrice? plRef(ListItem i) {
+    final r = _ref(priceFeed?.pl, i.plName);
+    if (r == null) return null;
+    final ch = refChain(r);
+    return ch == null || inTrip(ch) ? r : null;
+  }
 
   Deal? dealById(String? id) {
     if (id == null) return null;
@@ -226,24 +296,62 @@ class AppState extends ChangeNotifier {
     return null;
   }
 
-  /// Polish price per package: typed or from a deal, else last time's, else the usual shelf price.
+  /// This trip's deals for a list line: at the shop the shopper chose for it, else at any trip shop.
+  List<Deal> itemDeals(ListItem i) {
+    final all = dealsFor(i.plName);
+    return inTrip(i.chain) ? all.where((d) => d.chain == i.chain).toList() : all;
+  }
+
+  /// The deal a line is priced from: the one the shopper picked, else the best this trip has.
+  Deal? dealOf(ListItem i) {
+    if (i.plPrice != null) return null; // a typed price wins
+    final pinned = dealById(i.dealId);
+    if (pinned != null && dealUsable(pinned) && (!inTrip(i.chain) || pinned.chain == i.chain)) return pinned;
+    final l = itemDeals(i);
+    return l.isEmpty ? null : l.first;
+  }
+
+  /// Polish price per package, only from this trip's shops: typed, else a deal,
+  /// else last time's price there, else the usual shelf price.
   Est? plFor(ListItem i) {
-    if (i.plPrice != null) return (price: i.plPrice!, kind: i.dealId != null ? PriceKind.deal : PriceKind.typed, ref: null);
+    if (i.plPrice != null) return (price: i.plPrice!, kind: PriceKind.typed, ref: null);
+    final d = dealOf(i);
+    if (d != null) return (price: dealPrice(d), kind: PriceKind.deal, ref: null);
     final last = lastPrice(i);
-    if (last != null) return (price: last.pl, kind: PriceKind.last, ref: null);
+    if (last != null && (last.chain == null || inTrip(last.chain))) return (price: last.pl, kind: PriceKind.last, ref: null);
     final r = plRef(i);
     if (r != null && r.exQty > 0) return (price: r.exPrice, kind: PriceKind.ref, ref: r);
     return null;
   }
 
+  /// Which of the trip's shops a line will be bought at.
+  String? chainOf(ListItem i) {
+    if (inTrip(i.chain)) return i.chain;
+    final d = dealOf(i);
+    if (d != null) return d.chain;
+    final p = plFor(i);
+    if (p?.kind == PriceKind.ref) {
+      final ch = refChain(p!.ref!);
+      if (ch != null) return ch;
+    }
+    if (p?.kind == PriceKind.last && inTrip(lastPrice(i)?.chain)) return lastPrice(i)!.chain;
+    return tripChains.isEmpty ? null : tripChains.first;
+  }
+
+  /// Deals at shops that are NOT on the trip and are cheaper than what the trip offers.
+  List<Deal> cheaperElsewhere(ListItem i) {
+    final here = plFor(i)?.price;
+    final out = dealsAnywhere(i.plName).where((d) => !tripChains.contains(d.chain) && d.card != true && (here == null || dealPrice(d) < here - 0.009)).toList();
+    final seen = <String>{};
+    return [for (final d in out) if (seen.add(d.chain)) d].take(2).toList();
+  }
+
   /// The package size the Polish price is for, when known.
   Qty? basis(ListItem i) {
-    final d = dealById(i.dealId);
+    final d = dealOf(i);
     if (d != null) return dealQty(d);
-    if (i.plPrice == null && lastPrice(i) == null) {
-      final r = plRef(i);
-      if (r != null && r.exQty > 0) return (qty: r.exQty, unit: r.unit);
-    }
+    final p = plFor(i);
+    if (p?.kind == PriceKind.ref) return (qty: p!.ref!.exQty, unit: p.ref!.unit);
     return null;
   }
 
@@ -357,8 +465,11 @@ class AppState extends ChangeNotifier {
   final Map<String, List<Deal>> _matchCache = {};
   Object? _matchKey;
 
-  /// This week's deals for a Polish shelf name, best first. Cached per feed.
-  List<Deal> dealsFor(String? plName) {
+  /// This trip's deals for a Polish shelf name (trip shops, cards, day), best first.
+  List<Deal> dealsFor(String? plName) => dealsAnywhere(plName).where(dealUsable).toList();
+
+  /// This week's deals for a Polish shelf name in every chain, best first. Cached per feed.
+  List<Deal> dealsAnywhere(String? plName) {
     if (plName == null || plName.isEmpty) return const [];
     final key = (feed, feedConfig);
     if (_matchKey != key) {
@@ -415,9 +526,25 @@ class AppState extends ChangeNotifier {
       ltFuelPrice = (j['ltFuelPrice'] as num?)?.toDouble();
       plFuelPrice = (j['plFuelPrice'] as num?)?.toDouble();
       cardFeePct = (j['cardFeePct'] as num?)?.toDouble() ?? 0;
+      tripReady = j['tripReady'] as bool? ?? false;
+      tripChains
+        ..clear()
+        ..addAll(((j['tripChains'] as List?) ?? []).cast<String>());
+      cards
+        ..clear()
+        ..addAll(((j['cards'] as List?) ?? []).cast<String>());
+      tripDate = j['tripDate'] as String?;
       items
         ..clear()
         ..addAll(((j['items'] as List?) ?? []).map((e) => ListItem.fromJson(e as Map<String, dynamic>)));
+      if (((j['v'] as num?) ?? 1) < 2) {
+        // v1 copied a deal's price and shop into the line, so lines stuck to shops the
+        // shopper never planned to visit. Deal prices are now looked up per trip.
+        for (final i in items.where((e) => e.dealId != null)) {
+          i.plPrice = null;
+          i.chain = null;
+        }
+      }
       ((j['priceFixes'] as Map?) ?? {}).forEach((k, v) => priceFixes['$k'] = (v as num).toDouble());
       watch
         ..clear()
@@ -452,11 +579,12 @@ class AppState extends ChangeNotifier {
   Future<void> _save() => _prefs.setString(
         _key,
         jsonEncode({
-          'lang': lang.name, 'textScale': textScale, 'theme': themeMode.name, 'onboarded': onboarded,
+          'v': 2, 'lang': lang.name, 'textScale': textScale, 'theme': themeMode.name, 'onboarded': onboarded,
           'originId': originId, 'destId': destId, 'fuel': fuel.name, 'consumption': consumption,
           'refuelLitres': refuelLitres, 'travellers': travellers, 'ltFuelPrice': ltFuelPrice, 'plFuelPrice': plFuelPrice,
           'cardFeePct': cardFeePct, 'items': items.map((e) => e.toJson()).toList(), 'rate': rate?.toJson(), 'priceFixes': priceFixes,
           'storeChoice': storeChoice,
+          'tripReady': tripReady, 'tripChains': tripChains, 'cards': cards.toList(), 'tripDate': tripDate,
           'watch': watch.map((w) => w.toJson()).toList(), 'alerted': alerted.toList(), 'alertsOn': alertsOn,
           'trips': trips.map((t) => t.toJson()).toList(),
           'priceMemory': priceMemory.map((k, v) => MapEntry(k, {'pl': v.pl, 'chain': v.chain, 'date': v.date})),
@@ -499,6 +627,10 @@ class AppState extends ChangeNotifier {
     ltFuelPrice = null;
     plFuelPrice = null;
     cardFeePct = 0;
+    tripReady = false;
+    tripChains.clear();
+    cards.clear();
+    tripDate = null;
     priceFixes.clear();
     priceMemory.clear();
     storeChoice.clear();

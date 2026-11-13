@@ -4,16 +4,21 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_state.dart';
 import '../../core/format.dart';
+import '../../core/hours.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/calendar.dart';
+import '../../data/chains.dart';
 import '../../data/geo.dart';
-import '../../services/fuel.dart';
 import '../../main.dart';
+import '../../services/fuel.dart';
+import '../../services/stores.dart';
 import '../../widgets/ui.dart';
-import '../plan/plan_screen.dart';
+import '../history/history_screen.dart';
+import '../list/add_item_screen.dart';
+import '../plan/checklist_screen.dart';
 
-/// Trip economics. Every number shown is derived here from user inputs + live NBP rate.
+/// Trip economics. Every number shown is derived here from the trip, the list and the NBP rate.
 class TripCalc {
   TripCalc(AppState s)
       : km = (s.origin.km[s.destId] ?? 0) * 2,
@@ -50,152 +55,321 @@ class TripCalc {
   }
 }
 
-class TripScreen extends StatefulWidget {
+/// Average door-to-door speed for the drive estimate (towns, border, S61).
+const _avgKmh = 70;
+/// Rough time spent in each shop when working out the latest departure.
+const _minutesPerShop = 35;
+
+void _open(String url) => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+String _gmaps(Store st) => 'https://www.google.com/maps/dir/?api=1&destination=${st.lat},${st.lon}&travelmode=driving';
+String _waze(Store st) => 'https://waze.com/ul?ll=${st.lat},${st.lon}&navigate=yes';
+
+String _fuelName(BuildContext context, FuelType f) =>
+    context.s(switch (f) { FuelType.diesel => 'fuelDiesel', FuelType.petrol => 'fuelPetrol', FuelType.lpg => 'fuelLpg' });
+
+String _dayLabel(BuildContext context, DateTime d) {
+  final p = plNow();
+  final today = DateTime(p.year, p.month, p.day);
+  final diff = d.difference(today).inDays;
+  final wd = weekday(d, context.lang);
+  final name = diff == 0 ? context.s('planToday') : diff == 1 ? context.s('planTomorrow') : wd[0].toUpperCase() + wd.substring(1);
+  return '$name, ${dayMonth(d, context.lang)}';
+}
+
+/// The first tab. No trip yet → a few one-tap questions. Otherwise → the trip itself.
+class TripScreen extends StatelessWidget {
   const TripScreen({super.key});
 
   @override
-  State<TripScreen> createState() => _TripScreenState();
-}
-
-class _TripScreenState extends State<TripScreen> {
-  static const _steps = 4;
-  int? _step; // null = result
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final s = AppScope.read(context);
-    _step ??= (s.ltFuel == null || s.plFuel == null) ? 0 : null;
-  }
-
-  void _go(int? step) => setState(() => _step = step);
-
-  @override
   Widget build(BuildContext context) {
-    final step = _step;
+    final s = AppScope.of(context);
     return SafeArea(
       bottom: false,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 260),
-        switchInCurve: Curves.easeOutCubic,
-        transitionBuilder: (child, a) => FadeTransition(
-          opacity: a,
-          child: SlideTransition(position: Tween(begin: const Offset(.06, 0), end: Offset.zero).animate(a), child: child),
-        ),
-        child: step == null
-            ? _Result(key: const ValueKey('r'), onEdit: () => _go(0))
-            : _Wizard(
-                key: ValueKey(step),
-                step: step,
-                total: _steps,
-                onBack: step == 0 ? null : () => _go(step - 1),
-                onNext: () => _go(step + 1 >= _steps ? null : step + 1),
-              ),
+        child: s.tripReady ? const _Overview(key: ValueKey('o')) : const _Setup(key: ValueKey('s')),
       ),
     );
   }
 }
 
-class _Wizard extends StatelessWidget {
-  const _Wizard({super.key, required this.step, required this.total, required this.onNext, this.onBack});
-  final int step, total;
-  final VoidCallback onNext;
-  final VoidCallback? onBack;
+// ───────────────────────────── Setup: one question per screen
+
+enum _Q { from, to, shops, cards, day, car }
+
+class _Setup extends StatefulWidget {
+  const _Setup({super.key});
+
+  @override
+  State<_Setup> createState() => _SetupState();
+}
+
+class _SetupState extends State<_Setup> {
+  int _i = 0;
+
+  List<_Q> _steps(AppState s) => [
+        _Q.from,
+        _Q.to,
+        _Q.shops,
+        if (s.tripChains.any((c) => chainById(c)?.card != null)) _Q.cards,
+        _Q.day,
+        _Q.car,
+      ];
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final c = context.c;
-    final canNext = step != 3 || (s.ltFuel != null && s.plFuel != null);
+    final steps = _steps(s);
+    final i = _i.clamp(0, steps.length - 1);
+    final q = steps[i];
+    final last = i == steps.length - 1;
+    void next() => last ? s.update((x) => x.tripReady = true) : setState(() => _i = i + 1);
+    final canNext = q != _Q.shops || s.tripChains.isNotEmpty;
+
     return Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(8, 8, 20, 0),
         child: Row(children: [
-          if (onBack != null)
-            IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back_rounded, size: 28), tooltip: context.s('back'))
+          if (i > 0)
+            IconButton(onPressed: () => setState(() => _i = i - 1), icon: const Icon(Icons.arrow_back_rounded, size: 28), tooltip: context.s('back'))
           else
             const SizedBox(width: 12),
-          Expanded(child: Text(context.s('tripStep', {'i': step + 1, 'n': total}), style: context.tt.labelMedium)),
+          Expanded(child: Text(context.s('tripStep', {'i': i + 1, 'n': steps.length}), style: context.tt.labelMedium)),
         ]),
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
         child: Row(children: [
-          for (var i = 0; i < total; i++)
+          for (var k = 0; k < steps.length; k++)
             Expanded(
               child: Container(
                 height: 6,
-                margin: EdgeInsets.only(right: i == total - 1 ? 0 : 6),
-                decoration: BoxDecoration(color: i <= step ? Brand.yellow : c.raised, borderRadius: BorderRadius.circular(3)),
+                margin: EdgeInsets.only(right: k == steps.length - 1 ? 0 : 6),
+                decoration: BoxDecoration(color: k <= i ? Brand.yellow : c.raised, borderRadius: BorderRadius.circular(3)),
               ),
             ),
         ]),
       ),
       Expanded(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-          children: switch (step) {
-            0 => _from(context, s),
-            1 => _to(context, s),
-            2 => _car(context, s),
-            _ => _fuel(context, s),
-          },
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: ListView(
+            key: ValueKey(q),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+            children: switch (q) {
+              _Q.from => [_title(context, 'tripFrom'), _FromPicker(onPicked: next)],
+              _Q.to => [_title(context, 'tripTo'), _DestPicker(onPicked: next)],
+              _Q.shops => [_title(context, 'tripShops', 'tripShopsSub'), const _ShopsPicker()],
+              _Q.cards => [_title(context, 'tripCards', 'tripCardsSub'), const _CardsPicker()],
+              _Q.day => [_title(context, 'tripDay', 'tripDaySub'), _DayPicker(onPicked: next)],
+              _Q.car => [_title(context, 'tripCar'), const _CarForm()],
+            },
+          ),
         ),
       ),
-      Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-        decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line))),
-        child: BigButton(label: context.s('next'), icon: Icons.arrow_forward_rounded, onPressed: canNext ? onNext : null),
-      ),
+      if (q != _Q.from && q != _Q.to && q != _Q.day)
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.line))),
+          child: BigButton(
+            label: context.s(last ? 'tripCalc' : 'next'),
+            icon: last ? Icons.check_rounded : Icons.arrow_forward_rounded,
+            onPressed: canNext ? next : null,
+          ),
+        ),
     ]);
   }
+}
 
-  List<Widget> _title(BuildContext context, String key, [String? sub]) => [
+Widget _title(BuildContext context, String key, [String? sub]) => Padding(
+      padding: const EdgeInsets.only(bottom: 22),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(context.s(key), style: context.tt.headlineMedium),
         if (sub != null) ...[const SizedBox(height: 8), Text(context.s(sub), style: context.tt.bodyLarge!.copyWith(color: context.c.text2))],
-        const SizedBox(height: 22),
-      ];
+      ]),
+    );
 
-  List<Widget> _from(BuildContext context, AppState s) => [
-        ..._title(context, 'tripFrom'),
-        for (final o in origins)
-          ChoiceRow(
-            title: o.name,
-            selected: s.originId == o.id,
-            leading: const Icon(Icons.home_rounded),
-            onTap: () {
-              s.update((x) => x.originId = o.id);
-              onNext();
-            },
-          ),
-      ];
+class _FromPicker extends StatelessWidget {
+  const _FromPicker({required this.onPicked});
+  final VoidCallback onPicked;
 
-  List<Widget> _to(BuildContext context, AppState s) => [
-        ..._title(context, 'tripTo'),
-        for (final d in destinations)
-          ChoiceRow(
-            title: d.name,
-            subtitle: '${s.origin.km[d.id]} km',
-            selected: s.destId == d.id,
-            leading: const Icon(Icons.location_on_rounded, color: Brand.plRed),
-            onTap: () {
-              s.update((x) => x.destId = d.id);
-              onNext();
-            },
-          ),
-      ];
-
-  List<Widget> _car(BuildContext context, AppState s) {
-    final lang = context.lang;
-    return [
-      ..._title(context, 'tripCar'),
-      for (final f in FuelType.values)
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return Column(children: [
+      for (final o in origins)
         ChoiceRow(
-          title: context.s(switch (f) { FuelType.diesel => 'fuelDiesel', FuelType.petrol => 'fuelPetrol', FuelType.lpg => 'fuelLpg' }),
-          selected: s.fuel == f,
-          leading: const Icon(Icons.local_gas_station_rounded),
-          onTap: () => s.update((x) => x.fuel = f),
+          title: o.name,
+          selected: s.originId == o.id,
+          leading: const Icon(Icons.home_rounded),
+          onTap: () {
+            s.update((x) => x.originId = o.id);
+            onPicked();
+          },
         ),
+    ]);
+  }
+}
+
+class _FromChips extends StatelessWidget {
+  const _FromChips();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return Wrap(spacing: 8, runSpacing: 8, children: [
+      for (final o in origins)
+        ChoiceChip(label: Text(o.name), selected: s.originId == o.id, onSelected: (_) => s.update((x) => x.originId = o.id)),
+    ]);
+  }
+}
+
+class _DestPicker extends StatelessWidget {
+  const _DestPicker({required this.onPicked});
+  final VoidCallback onPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return Column(children: [
+      for (final d in destinations)
+        ChoiceRow(
+          title: d.name,
+          subtitle: context.s('tripToSub', {'km': s.origin.km[d.id] ?? '?', 'from': s.origin.name}),
+          selected: s.destId == d.id,
+          leading: const Icon(Icons.location_on_rounded, color: Brand.plRed),
+          onTap: () {
+            s.setDest(d.id);
+            onPicked();
+          },
+        ),
+    ]);
+  }
+}
+
+/// Shops in the destination town; several can be picked. Order of picking = order of importance.
+class _ShopsPicker extends StatelessWidget {
+  const _ShopsPicker();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final here = s.chainsInTown;
+    final list = chains.where((c) => here.isEmpty || here.contains(c.id)).toList();
+    final dealCount = <String, int>{};
+    for (final d in s.deals) {
+      dealCount[d.chain] = (dealCount[d.chain] ?? 0) + 1;
+    }
+    // Most shops in town first (the chains people actually use), then by deals known.
+    int shops(Chain ch) => s.storeFeed?.inTown(s.destId, ch.id).length ?? 0;
+    list.sort((a, b) {
+      final d = shops(b).compareTo(shops(a));
+      return d != 0 ? d : (dealCount[b.id] ?? 0).compareTo(dealCount[a.id] ?? 0);
+    });
+    return Column(children: [
+      for (final ch in list)
+        ChoiceRow(
+          title: ch.name,
+          subtitle: context.s((dealCount[ch.id] ?? 0) > 0 ? 'tripShopSub' : 'tripShopSubNoDeals',
+              {'n': s.storeFeed?.inTown(s.destId, ch.id).length ?? 0, 'm': dealCount[ch.id] ?? 0}),
+          selected: s.tripChains.contains(ch.id),
+          leading: ChainDot(ch),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            s.toggleTripChain(ch.id);
+          },
+        ),
+    ]);
+  }
+}
+
+/// A chain's colour as a small rounded square with its initial.
+class ChainDot extends StatelessWidget {
+  const ChainDot(this.chain, {super.key, this.size = 40, this.label});
+  final Chain chain;
+  final double size;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: chain.color, borderRadius: BorderRadius.circular(size * .3)),
+        child: Text(label ?? chain.name[0], style: context.tt.titleLarge!.copyWith(color: chain.ink, fontWeight: FontWeight.w800, fontSize: size * .45)),
+      );
+}
+
+class _CardsPicker extends StatelessWidget {
+  const _CardsPicker();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final withCard = s.tripChains.map(chainById).whereType<Chain>().where((c) => c.card != null);
+    return Column(children: [
+      for (final ch in withCard)
+        ChoiceRow(
+          title: context.s('tripCardHave', {'card': ch.card!}),
+          subtitle: ch.name,
+          selected: s.cards.contains(ch.id),
+          leading: const Icon(Icons.credit_card_rounded),
+          onTap: () => s.toggleCard(ch.id),
+        ),
+    ]);
+  }
+}
+
+class _DayPicker extends StatelessWidget {
+  const _DayPicker({required this.onPicked});
+  final VoidCallback onPicked;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final p = plNow();
+    final days = [for (var i = 0; i < 7; i++) DateTime(p.year, p.month, p.day + i)];
+    final sel = s.tripDay;
+    return Column(children: [
+      for (final d in days)
+        if (shopsOpen(d))
+          ChoiceRow(
+            title: _dayLabel(context, d),
+            selected: d == sel,
+            leading: const Icon(Icons.event_rounded),
+            onTap: () {
+              s.update((x) => x.tripDate = isoDay(d));
+              onPicked();
+            },
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 6, 18, 14),
+            child: Row(children: [
+              Icon(Icons.block_rounded, color: c.bad, size: 22),
+              const SizedBox(width: 14),
+              Expanded(child: Text('${_dayLabel(context, d)} · ${context.s('planClosedShort')}', style: context.tt.bodyLarge!.copyWith(color: c.text3))),
+            ]),
+          ),
+    ]);
+  }
+}
+
+class _CarForm extends StatelessWidget {
+  const _CarForm();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final lang = context.lang;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Segmented<FuelType>(
+        value: s.fuel,
+        options: [for (final f in FuelType.values) (f, _fuelName(context, f))],
+        onChanged: (v) => s.update((x) => x.fuel = v),
+      ),
       const SizedBox(height: 14),
       Panel(
         child: Row(children: [
@@ -204,46 +378,6 @@ class _Wizard extends StatelessWidget {
         ]),
       ),
       const SizedBox(height: 12),
-      Panel(
-        child: Row(children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(context.s('tripPeople'), style: context.tt.titleMedium),
-              Text(context.s('tripPeopleSub'), style: context.tt.bodyMedium),
-            ]),
-          ),
-          Stepper2(value: s.travellers.toDouble(), min: 1, max: 7, onChanged: (v) => s.update((x) => x.travellers = v.toInt())),
-        ]),
-      ),
-    ];
-  }
-
-  List<Widget> _fuel(BuildContext context, AppState s) {
-    final lang = context.lang;
-    return [
-      ..._title(context, 'tripFuel', 'tripFuelSub'),
-      _PriceField(
-        key: ValueKey('lt-${s.fuel.name}'),
-        label: context.s('fuelLt'),
-        suffix: '€',
-        value: s.ltFuelPrice,
-        auto: s.autoLtFuel,
-        autoSource: s.autoLtSource,
-        onChanged: (v) => s.update((x) => x.ltFuelPrice = v),
-      ),
-      if (s.autoLtFuel == null) _SourceLink(text: context.s('srcLt'), url: 'https://degalukainos.ena.lt/'),
-      const SizedBox(height: 18),
-      _PriceField(
-        key: ValueKey('pl-${s.fuel.name}'),
-        label: context.s('fuelPl'),
-        suffix: 'zł',
-        value: s.plFuelPrice,
-        auto: s.autoPlFuel,
-        autoSource: s.autoPlSource,
-        onChanged: (v) => s.update((x) => x.plFuelPrice = v),
-      ),
-      if (s.autoPlFuel == null) _SourceLink(text: context.s('srcPl'), url: 'https://www.e-petrol.pl/notowania/rynek-krajowy/ceny-stacje-paliw'),
-      const SizedBox(height: 18),
       Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(context.s('refuel'), style: context.tt.titleMedium),
@@ -258,9 +392,685 @@ class _Wizard extends StatelessWidget {
           ),
         ]),
       ),
-    ];
+      const SizedBox(height: 12),
+      Panel(
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.s('tripPeople'), style: context.tt.titleMedium),
+              Text(context.s('tripPeopleSub'), style: context.tt.bodyMedium),
+            ]),
+          ),
+          Stepper2(value: s.travellers.toDouble(), min: 1, max: 7, onChanged: (v) => s.update((x) => x.travellers = v.toInt())),
+        ]),
+      ),
+    ]);
   }
 }
+
+/// Opens one setup question as a sheet, for changing a single thing later.
+Future<void> _editSheet(BuildContext context, String title, Widget Function(VoidCallback close) body, {String? sub}) => showSheet(
+      context,
+      (ctx) {
+        void close() => Navigator.pop(ctx);
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(ctx.s(title), style: ctx.tt.headlineSmall),
+            if (sub != null) ...[const SizedBox(height: 6), Text(ctx.s(sub), style: ctx.tt.bodyMedium)],
+            const SizedBox(height: 16),
+            body(close),
+            const SizedBox(height: 8),
+            BigButton(label: ctx.s('done'), icon: Icons.check_rounded, onPressed: close),
+          ]),
+        );
+      },
+    );
+
+// ───────────────────────────── Overview
+
+/// One stop on the route: a shop (or fuel station) and what to buy there.
+class _Stop {
+  _Stop(this.chain, this.store, this.items);
+  final String chain;
+  final Store? store;
+  final List<ListItem> items;
+  bool get fuel => chain == 'fuel';
+}
+
+List<_Stop> _stops(AppState s) {
+  final byChain = <String, List<ListItem>>{for (final ch in s.tripChains) ch: []};
+  for (final i in s.items.where((e) => !e.checked)) {
+    final ch = s.chainOf(i);
+    if (ch != null) byChain.putIfAbsent(ch, () => []).add(i);
+  }
+  final shops = [for (final e in byChain.entries) _Stop(e.key, s.storeFor(e.key), e.value)];
+  // Nearest-next from home: a short loop through town, fuel last on the way out.
+  final ordered = <_Stop>[];
+  var lat = s.origin.lat, lon = s.origin.lon;
+  final rest = shops.where((x) => x.store != null).toList();
+  while (rest.isNotEmpty) {
+    rest.sort((a, b) => kmBetween(lat, lon, a.store!.lat, a.store!.lon).compareTo(kmBetween(lat, lon, b.store!.lat, b.store!.lon)));
+    final next = rest.removeAt(0);
+    ordered.add(next);
+    lat = next.store!.lat;
+    lon = next.store!.lon;
+  }
+  ordered.addAll(shops.where((x) => x.store == null));
+  if (s.refuelLitres > 0) ordered.add(_Stop('fuel', s.storeFor('fuel'), const []));
+  return ordered;
+}
+
+String _routeUrl(AppState s, List<_Stop> stops) {
+  final pts = [for (final x in stops) if (x.store != null) '${x.store!.lat},${x.store!.lon}'].take(9).join('|');
+  final home = Uri.encodeComponent('${s.origin.name}, Lithuania');
+  return 'https://www.google.com/maps/dir/?api=1&origin=$home&destination=$home'
+      '${pts.isEmpty ? '' : '&waypoints=${Uri.encodeComponent(pts)}'}&travelmode=driving';
+}
+
+class _Overview extends StatelessWidget {
+  const _Overview({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final day = s.tripDay;
+    final law = shopDay(day);
+    final lawClosed = law == ShopDay.sundayClosed || law == ShopDay.holiday;
+    final stops = _stops(s);
+    final shopStops = stops.where((x) => !x.fuel).toList();
+    final open = s.items.where((e) => !e.checked).length;
+    final r = s.rate;
+
+    return RefreshIndicator(
+      color: Brand.ink,
+      backgroundColor: Brand.yellow,
+      onRefresh: () async {
+        await Future.wait([s.refreshRate(), s.refreshFeed()]);
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        children: [
+          Row(children: [
+            const LogoMark(size: 36),
+            const SizedBox(width: 10),
+            Expanded(child: Text(context.s('tripHeader'), style: context.tt.headlineMedium)),
+          ]),
+          const SizedBox(height: 16),
+          const _TripFacts(),
+          const SizedBox(height: 12),
+          if (lawClosed) ...[
+            Panel(
+              color: c.badSoft,
+              child: Row(children: [
+                Icon(Icons.block_rounded, color: c.bad, size: 28),
+                const SizedBox(width: 12),
+                Expanded(child: Text(context.s(law == ShopDay.holiday ? 'planDayHoliday' : 'planDaySunday'), style: context.tt.bodyLarge)),
+              ]),
+            ),
+            const SizedBox(height: 12),
+          ],
+          const _Result(),
+          SectionTitle(context.s('planStops', {'n': stops.length})),
+          for (var i = 0; i < stops.length; i++) _StopCard(n: i + 1, stop: stops[i], day: day, canRemove: stops[i].fuel || s.tripChains.length > 1),
+          Row(children: [
+            Expanded(child: BigButton(label: context.s('tripAddShop'), icon: Icons.add_business_rounded, kind: BtnKind.secondary, onPressed: () => _addShop(context))),
+            if (s.refuelLitres == 0) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: BigButton(
+                  label: context.s('tripAddFuel'),
+                  icon: Icons.local_gas_station_rounded,
+                  kind: BtnKind.secondary,
+                  onPressed: () => s.update((x) => x.refuelLitres = 40),
+                ),
+              ),
+            ],
+          ]),
+          if (!lawClosed) ...[
+            const SizedBox(height: 12),
+            _Timing(day: day, stops: shopStops),
+          ],
+          const SizedBox(height: 20),
+          if (stops.any((x) => x.store != null)) ...[
+            BigButton(label: context.s('planRoute'), icon: Icons.alt_route_rounded, onPressed: () => _open(_routeUrl(s, stops))),
+            const SizedBox(height: 10),
+          ],
+          BigButton(
+            label: context.s('tripList', {'n': open}),
+            icon: Icons.shopping_bag_rounded,
+            kind: BtnKind.secondary,
+            onPressed: () => shellTab.value = 1,
+          ),
+          const SizedBox(height: 10),
+          BigButton(
+            label: context.s('planChecklist'),
+            icon: Icons.fact_check_rounded,
+            kind: BtnKind.secondary,
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChecklistScreen())),
+          ),
+          if (s.items.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            BigButton(label: context.s('finishOpen'), icon: Icons.flag_rounded, kind: BtnKind.secondary, onPressed: () => showFinishTrip(context)),
+          ],
+          const SizedBox(height: 18),
+          if (r != null) Text(context.s('convRate', {'r': fmtNum(r.mid, lang, digits: 4), 'd': r.date}), style: context.tt.bodySmall, textAlign: TextAlign.center),
+          const SizedBox(height: 6),
+          Text(context.s('estimate'), style: context.tt.bodySmall, textAlign: TextAlign.center),
+          const SizedBox(height: 6),
+          Text(context.s('planOsm', {'date': s.storeFeed?.generatedAt == null ? '—' : dayMonth(s.storeFeed!.generatedAt!.toLocal(), lang)}),
+              style: context.tt.bodySmall, textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _addShop(BuildContext context) => showSheet(context, (ctx) {
+      final s = AppScope.of(ctx);
+      final here = s.chainsInTown;
+      final left = chains.where((c) => (here.isEmpty || here.contains(c.id)) && !s.tripChains.contains(c.id)).toList();
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(ctx.s('tripAddShopTitle'), style: ctx.tt.headlineSmall),
+          const SizedBox(height: 14),
+          if (left.isEmpty) Text(ctx.s('tripAddShopNone'), style: ctx.tt.bodyLarge),
+          for (final ch in left)
+            ChoiceRow(
+              title: ch.name,
+              subtitle: ctx.s('tripShopCount', {'n': s.storeFeed?.inTown(s.destId, ch.id).length ?? 0}),
+              selected: false,
+              leading: ChainDot(ch),
+              onTap: () {
+                s.addTripChain(ch.id);
+                Navigator.pop(ctx);
+              },
+            ),
+        ]),
+      );
+    });
+
+/// Where, when, which car, which cards — each line opens just that question.
+class _TripFacts extends StatelessWidget {
+  const _TripFacts();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final cardChains = s.tripChains.map(chainById).whereType<Chain>().where((x) => x.card != null).toList();
+    final held = cardChains.where((x) => s.cards.contains(x.id)).map((x) => x.card!).toList();
+    final dayOpen = shopsOpen(s.tripDay);
+
+    Widget row(IconData icon, String label, String value, VoidCallback onTap, {Color? color}) => InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+            child: Row(children: [
+              Icon(icon, size: 24, color: color ?? c.text2),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(label, style: context.tt.bodySmall),
+                  Text(value, style: context.tt.titleMedium!.copyWith(color: color)),
+                ]),
+              ),
+              Icon(Icons.edit_rounded, size: 20, color: c.text3),
+            ]),
+          ),
+        );
+
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+      child: Column(children: [
+        row(Icons.route_rounded, context.s('tripRouteRow'), '${s.origin.name} → ${s.dest.name} · ${s.origin.km[s.destId] ?? '?'} km', () {
+          _editSheet(context, 'tripRouteRow', (close) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(context.s('tripFromRow'), style: context.tt.titleMedium),
+                const SizedBox(height: 8),
+                const _FromChips(),
+                const SizedBox(height: 18),
+                Text(context.s('tripTo'), style: context.tt.titleMedium),
+                const SizedBox(height: 8),
+                _DestPicker(onPicked: close),
+              ]));
+        }),
+        Divider(color: c.line, height: 1),
+        row(Icons.event_rounded, context.s('tripDayRow'), _dayLabel(context, s.tripDay), () {
+          _editSheet(context, 'tripDay', (close) => _DayPicker(onPicked: close), sub: 'tripDaySub');
+        }, color: dayOpen ? null : c.bad),
+        Divider(color: c.line, height: 1),
+        row(
+          Icons.directions_car_rounded,
+          context.s('tripCarRow'),
+          context.s('tripCarVal', {'fuel': _fuelName(context, s.fuel), 'c': fmtNum(s.consumption, lang)}) +
+              (s.travellers > 1 ? context.s('tripCarPeople', {'n': s.travellers}) : ''),
+          () => _editSheet(context, 'tripCar', (_) => const _CarForm()),
+        ),
+        if (cardChains.isNotEmpty) ...[
+          Divider(color: c.line, height: 1),
+          row(Icons.credit_card_rounded, context.s('tripCardsRow'), held.isEmpty ? context.s('tripCardsNone') : held.join(', '),
+              () => _editSheet(context, 'tripCards', (_) => const _CardsPicker(), sub: 'tripCardsSub')),
+        ],
+      ]),
+    );
+  }
+}
+
+/// The answer: is it worth it, and how the number is made.
+class _Result extends StatelessWidget {
+  const _Result();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final t = TripCalc(s);
+    final shops = s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ');
+    final open = s.items.where((e) => !e.checked).toList();
+
+    if (open.isEmpty) {
+      return Panel(
+        color: Brand.yellow,
+        padding: const EdgeInsets.all(22),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(context.s('tripNoItems'), style: context.tt.headlineSmall!.copyWith(color: Brand.ink)),
+          const SizedBox(height: 6),
+          Text(context.s('tripNoItemsSub', {'shops': shops}), style: context.tt.bodyLarge!.copyWith(color: Brand.ink.withValues(alpha: .8))),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: Brand.ink, foregroundColor: Brand.yellow, minimumSize: const Size.fromHeight(56)),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddItemScreen(), fullscreenDialog: true)),
+            icon: const Icon(Icons.add_rounded),
+            label: Text(context.s('listAdd'), style: context.tt.titleMedium!.copyWith(color: Brand.yellow)),
+          ),
+        ]),
+      );
+    }
+
+    // Spend in Poland, from the trip's shops only.
+    var pln = 0.0;
+    var unknown = 0;
+    for (final i in open) {
+      final p = s.plFor(i);
+      if (p == null) {
+        unknown++;
+      } else {
+        pln += p.price * i.qty;
+      }
+    }
+    final plEur = s.toEur(pln);
+
+    if (s.rate == null || !t.ready) {
+      return Panel(color: c.warnSoft, child: Text(context.s('rateNone'), style: context.tt.bodyLarge));
+    }
+
+    final verdict = t.basket.priced == 0 ? null : t.net >= 15 ? 'Worth' : t.net >= 0 ? 'Marginal' : 'Not';
+    final (vColor, vBg, vIcon) = switch (verdict) {
+      'Worth' => (c.good, c.goodSoft, Icons.check_circle_rounded),
+      'Marginal' => (c.warn, c.warnSoft, Icons.help_rounded),
+      'Not' => (c.bad, c.badSoft, Icons.cancel_rounded),
+      _ => (c.text2, c.raised, Icons.info_rounded),
+    };
+
+    Widget row(IconData icon, String label, String? sub, String value, {Color? color, VoidCallback? onTap}) => InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(icon, color: c.text2, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(label, style: context.tt.titleMedium),
+                  if (sub != null) Text(sub, style: context.tt.bodyMedium),
+                ]),
+              ),
+              const SizedBox(width: 10),
+              Text(value, style: context.tt.titleMedium!.copyWith(color: color, fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        );
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Panel(
+        color: vBg,
+        padding: const EdgeInsets.all(22),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(vIcon, color: vColor, size: 28),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(verdict == null ? context.s('tripNoPrices') : context.s('result$verdict'),
+                  style: context.tt.titleLarge!.copyWith(color: vColor)),
+            ),
+          ]),
+          if (verdict != null) ...[
+            const SizedBox(height: 12),
+            Text(context.s('resultNet'), style: context.tt.bodyMedium),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(eurSigned(t.net, lang), style: context.tt.displayLarge)),
+            if (s.travellers > 1) Text(context.s('resultPerPerson', {'v': eur(t.net / s.travellers, lang)}), style: context.tt.titleMedium),
+          ] else ...[
+            const SizedBox(height: 8),
+            Text(context.s('tripNoPricesSub', {'shops': shops}), style: context.tt.bodyLarge),
+          ],
+        ]),
+      ),
+      const SizedBox(height: 12),
+      Panel(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+        child: Column(children: [
+          row(Icons.shopping_bag_rounded, context.s('rowShopping'),
+              context.s('tripPriced', {'n': t.basket.priced, 'm': open.length}), eurSigned(t.shopping, lang),
+              color: c.good, onTap: () => shellTab.value = 1),
+          Divider(color: c.line, height: 1),
+          row(Icons.local_gas_station_rounded, context.s('rowFuelTrip'),
+              '${t.km} km · ${fmtNum(t.litres, lang)} l × ${eur(t.ltFuel!, lang, digits: 3)}', eurSigned(-t.tripCost, lang),
+              color: c.bad, onTap: () => _fuelSheet(context)),
+          if (s.refuelLitres > 0) ...[
+            Divider(color: c.line, height: 1),
+            row(Icons.ev_station_rounded, context.s('rowRefuel'), '${s.refuelLitres} l × ${eur(t.plFuelEur!, lang, digits: 3)}', eurSigned(t.refuelSaving, lang),
+                color: t.refuelSaving >= 0 ? c.good : c.bad, onTap: () => _fuelSheet(context)),
+          ],
+          Container(height: 2, color: c.text, margin: const EdgeInsets.symmetric(vertical: 4)),
+          row(Icons.functions_rounded, context.s('rowTotal'), null, eurSigned(t.net, lang)),
+        ]),
+      ),
+      const SizedBox(height: 8),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Text(
+          [
+            context.s('tripSpend', {'v': '${zl(pln, lang)}${plEur == null ? '' : ' ≈ ${eur(plEur, lang)}'}'}),
+            if (unknown > 0) context.s('planUnknown', {'n': unknown}),
+            if (t.breakEven != null && t.net < 0) context.s('breakEven', {'v': eur(t.breakEven!, lang, digits: 0)}),
+          ].join(' · '),
+          style: context.tt.bodyMedium,
+        ),
+      ),
+    ]);
+  }
+}
+
+Future<void> _fuelSheet(BuildContext context) => showSheet(context, (ctx) {
+      final s = AppScope.of(ctx);
+      return SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(ctx.s('tripFuel'), style: ctx.tt.headlineSmall),
+          const SizedBox(height: 6),
+          Text(ctx.s('tripFuelSub'), style: ctx.tt.bodyMedium),
+          const SizedBox(height: 16),
+          _PriceField(
+            key: ValueKey('lt-${s.fuel.name}'),
+            label: '${ctx.s('fuelLt')} · ${_fuelName(ctx, s.fuel)}',
+            suffix: '€',
+            value: s.ltFuelPrice,
+            auto: s.autoLtFuel,
+            autoSource: s.autoLtSource,
+            onChanged: (v) => s.update((x) => x.ltFuelPrice = v),
+          ),
+          if (s.autoLtFuel == null) _SourceLink(text: ctx.s('srcLt'), url: 'https://degalukainos.ena.lt/'),
+          const SizedBox(height: 18),
+          _PriceField(
+            key: ValueKey('pl-${s.fuel.name}'),
+            label: '${ctx.s('fuelPl')} · ${_fuelName(ctx, s.fuel)}',
+            suffix: 'zł',
+            value: s.plFuelPrice,
+            auto: s.autoPlFuel,
+            autoSource: s.plFuelIsCap ? null : s.autoPlSource,
+            onChanged: (v) => s.update((x) => x.plFuelPrice = v),
+          ),
+          if (s.plCap != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(Icons.gavel_rounded, size: 18, color: ctx.c.good),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    ctx.s('fuelCapNote', {
+                      'v': fmtNum(s.plCap!, ctx.lang, digits: 2),
+                      'date': DateTime.tryParse(s.fuelFeed!.plCap!.date) == null ? s.fuelFeed!.plCap!.date : dayMonth(DateTime.parse(s.fuelFeed!.plCap!.date), ctx.lang),
+                    }),
+                    style: ctx.tt.bodyMedium!.copyWith(color: ctx.c.text2),
+                  ),
+                ),
+              ]),
+            ),
+          if (s.autoPlFuel == null) _SourceLink(text: ctx.s('srcPl'), url: 'https://www.e-petrol.pl/notowania/rynek-krajowy/ceny-stacje-paliw'),
+          const SizedBox(height: 18),
+          BigButton(label: ctx.s('done'), icon: Icons.check_rounded, onPressed: () => Navigator.pop(ctx)),
+        ]),
+      );
+    });
+
+/// When to leave: shops' hours that day in both clocks, and the latest sensible departure.
+class _Timing extends StatelessWidget {
+  const _Timing({required this.day, required this.stops});
+  final DateTime day;
+  final List<_Stop> stops;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final p = plNow();
+    final isToday = day.year == p.year && day.month == p.month && day.day == p.day;
+    final km = s.origin.km[s.destId] ?? 0;
+    final driveMin = (km / _avgKmh * 60).round();
+    final f = s.storeFeed;
+    int? opens, closes;
+    for (final x in stops) {
+      if (x.store == null || f == null) continue;
+      final h = dayHours(f.hoursOf(x.store!).hours, day);
+      if (h.kind != HoursKind.open) continue;
+      opens = opens == null ? h.opens : (h.opens! > opens ? h.opens : opens); // all open
+      closes = closes == null ? h.closes : (h.closes! < closes ? h.closes : closes); // first to close
+    }
+    String both(int m) => '${fmtMin(m)} (LT ${fmtMin(m + 60)})';
+    // Latest departure, Lithuanian time: arrive, shop everywhere, before the first shop closes.
+    final latest = closes == null ? null : closes + 60 - driveMin - _minutesPerShop * stops.length;
+    final now = DateTime.now();
+    final late = isToday && latest != null && now.hour * 60 + now.minute > latest;
+
+    Widget line(IconData icon, String text, {Color? color}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(icon, size: 24, color: color ?? c.text2),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text, style: context.tt.bodyLarge!.copyWith(color: color))),
+          ]),
+        );
+
+    return Panel(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        line(Icons.route_rounded, context.s('planDrive', {'km': km, 'h': fmtNum(driveMin / 60, context.lang)})),
+        if (opens != null && closes != null) line(Icons.storefront_rounded, context.s('planHours', {'from': both(opens), 'to': both(closes)})),
+        if (latest != null && latest > 0)
+          line(late ? Icons.warning_amber_rounded : Icons.schedule_rounded, context.s(late ? 'planLate' : 'planLeaveBy', {'t': fmtMin(latest)}),
+              color: late ? c.bad : null),
+        line(Icons.access_time_rounded, context.s('planTz')),
+      ]),
+    );
+  }
+}
+
+class _StopCard extends StatelessWidget {
+  const _StopCard({required this.n, required this.stop, required this.day, required this.canRemove});
+  final int n;
+  final _Stop stop;
+  final DateTime day;
+  final bool canRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final fuel = stop.fuel;
+    final chain = chainById(stop.chain);
+    final st = stop.store;
+    final title = fuel ? '${context.s('planFuel')} · ${st?.brand ?? ''}' : (chain?.name ?? stop.chain);
+    var sub = 0.0;
+    var unknown = 0;
+    for (final i in stop.items) {
+      final p = s.plFor(i)?.price;
+      if (p == null) {
+        unknown++;
+      } else {
+        sub += p * i.qty;
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Panel(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            if (fuel)
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(color: Brand.green, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.local_gas_station_rounded, color: Colors.white),
+              )
+            else if (chain != null)
+              ChainDot(chain, label: '$n')
+            else
+              const SizedBox(width: 40),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, style: context.tt.titleLarge),
+                if (st == null)
+                  Text(context.s('planNoShop', {'town': s.dest.name}), style: context.tt.bodyMedium!.copyWith(color: c.warn))
+                else ...[
+                  Text(st.address ?? st.name ?? context.s('planNoAddress'), style: context.tt.bodyMedium),
+                  const SizedBox(height: 6),
+                  _HoursPill(store: st, day: day),
+                ],
+                const SizedBox(height: 8),
+                if (fuel)
+                  Text(context.s('planFuelLitres', {'l': s.refuelLitres}), style: context.tt.bodyMedium)
+                else
+                  InkWell(
+                    onTap: () => shellTab.value = 1,
+                    child: Text(
+                      stop.items.isEmpty
+                          ? context.s('tripStopNoItems')
+                          : context.s('tripStopItems', {'items': context.items(stop.items.length), 'v': '${unknown > 0 ? '≥ ' : ''}${zl(sub, lang)}'}),
+                      style: context.tt.titleMedium!.copyWith(color: stop.items.isEmpty ? c.text3 : null),
+                    ),
+                  ),
+              ]),
+            ),
+            if (canRemove)
+              IconButton(
+                tooltip: context.s('tripRemoveStop'),
+                icon: Icon(Icons.close_rounded, color: c.text3),
+                onPressed: () => fuel ? s.update((x) => x.refuelLitres = 0) : s.toggleTripChain(stop.chain),
+              ),
+          ]),
+          if (st != null)
+            Wrap(spacing: 0, children: [
+              TextButton.icon(onPressed: () => _open(_gmaps(st)), icon: const Icon(Icons.map_rounded, size: 20), label: const Text('Google Maps')),
+              TextButton.icon(onPressed: () => _open(_waze(st)), icon: const Icon(Icons.navigation_rounded, size: 20), label: const Text('Waze')),
+              if ((s.storeFeed?.inTown(s.destId, stop.chain).length ?? 0) > 1)
+                TextButton.icon(
+                  onPressed: () => _pickStore(context, stop.chain),
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 20),
+                  label: Text(context.s('planOtherShop')),
+                ),
+            ]),
+        ]),
+      ),
+    );
+  }
+}
+
+class _HoursPill extends StatelessWidget {
+  const _HoursPill({required this.store, required this.day});
+  final Store store;
+  final DateTime day;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final p = plNow();
+    final isToday = day.year == p.year && day.month == p.month && day.day == p.day;
+    final (:hours, :guessed) = s.storeFeed!.hoursOf(store);
+    final h = dayHours(hours, day, fuel: store.isFuel);
+    String text;
+    Color fg, bg;
+    switch (h.kind) {
+      case HoursKind.lawClosed:
+      case HoursKind.closed:
+        (text, fg, bg) = (context.s('hoursClosed'), c.bad, c.badSoft);
+      case HoursKind.unknown:
+        (text, fg, bg) = (context.s('hoursUnknown'), c.text2, c.raised);
+      case HoursKind.open when h.spans.length == 1 && h.opens == 0 && h.closes == 1440:
+        (text, fg, bg) = (context.s('hours247'), c.good, c.goodSoft);
+      case HoursKind.open:
+        final range = h.spans.map((x) => '$x').join(', ');
+        text = '$range (LT ${fmtMin(h.opens! + 60)}–${fmtMin(h.closes! + 60)})';
+        (fg, bg) = (c.good, c.goodSoft);
+        if (isToday) {
+          final now = nowStatus(h, p.hour * 60 + p.minute);
+          text = switch (now.kind) {
+            NowKind.open => context.s('hoursOpenUntil', {'t': fmtMin(now.at!), 'lt': fmtMin(now.at! + 60)}),
+            NowKind.opensLater => context.s('hoursOpensAt', {'t': fmtMin(now.at!), 'lt': fmtMin(now.at! + 60), 'c': fmtMin(h.closes!), 'lc': fmtMin(h.closes! + 60)}),
+            _ => context.s('hoursClosedNow'),
+          };
+          if (now.kind == NowKind.closedForDay) (fg, bg) = (c.bad, c.badSoft);
+        }
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Pill(text, fg: fg, bg: bg, icon: Icons.schedule_rounded),
+      if (guessed && h.kind == HoursKind.open)
+        Padding(padding: const EdgeInsets.only(top: 4), child: Text(context.s('hoursGuessed'), style: context.tt.bodySmall)),
+    ]);
+  }
+}
+
+Future<void> _pickStore(BuildContext context, String chain) => showSheet(context, (ctx) {
+      final s = AppScope.of(ctx);
+      final f = s.storeFeed!;
+      final list = f.inTown(s.destId, chain);
+      final current = s.storeFor(chain);
+      final day = s.tripDay;
+      return ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+        children: [
+          Text(chain == 'fuel' ? ctx.s('planFuel') : chainById(chain)?.name ?? chain, style: ctx.tt.headlineSmall),
+          const SizedBox(height: 12),
+          for (final st in list)
+            ChoiceRow(
+              title: st.address ?? st.name ?? ctx.s('planNoAddress'),
+              subtitle: () {
+                final h = dayHours(f.hoursOf(st).hours, day, fuel: st.isFuel);
+                final brand = chain == 'fuel' ? '${st.brand} · ' : '';
+                return h.kind == HoursKind.open ? '$brand${h.spans.join(', ')}' : '$brand${ctx.s(h.kind == HoursKind.unknown ? 'hoursUnknown' : 'hoursClosed')}';
+              }(),
+              selected: st.id == current?.id,
+              leading: const Icon(Icons.location_on_rounded, color: Brand.plRed),
+              onTap: () {
+                s.chooseStore(chain, st.id);
+                Navigator.pop(ctx);
+              },
+            ),
+        ],
+      );
+    });
 
 class _PriceField extends StatefulWidget {
   const _PriceField({super.key, required this.label, required this.suffix, required this.value, required this.onChanged, this.auto, this.autoSource});
@@ -370,128 +1180,4 @@ class _SourceLink extends StatelessWidget {
           label: Text(text, style: context.tt.bodyMedium!.copyWith(decoration: TextDecoration.underline)),
         ),
       );
-}
-
-class _Result extends StatelessWidget {
-  const _Result({super.key, required this.onEdit});
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppScope.of(context);
-    final lang = context.lang;
-    final c = context.c;
-    final t = TripCalc(s);
-    final verdict = t.net >= 15 ? 'Worth' : t.net >= 0 ? 'Marginal' : 'Not';
-    final (vColor, vBg, vIcon) = switch (verdict) {
-      'Worth' => (c.good, c.goodSoft, Icons.check_circle_rounded),
-      'Marginal' => (c.warn, c.warnSoft, Icons.help_rounded),
-      _ => (c.bad, c.badSoft, Icons.cancel_rounded),
-    };
-    final sat = nextSaturday(DateTime.now());
-    final sundayToday = !shopsOpen(DateTime.now());
-
-    Widget row(IconData icon, String label, String? sub, String value, {Color? color}) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(icon, color: c.text2, size: 26),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(label, style: context.tt.titleMedium),
-                if (sub != null) Text(sub, style: context.tt.bodyMedium),
-              ]),
-            ),
-            const SizedBox(width: 10),
-            Text(value, style: context.tt.titleLarge!.copyWith(color: color)),
-          ]),
-        );
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-      children: [
-        Text('${s.origin.name} → ${s.dest.name}', style: context.tt.titleMedium!.copyWith(color: c.text2)),
-        const SizedBox(height: 4),
-        Text(context.s('tripTitle'), style: context.tt.headlineMedium),
-        const SizedBox(height: 18),
-        if (s.rate == null)
-          Panel(color: c.warnSoft, child: Text(context.s('rateNone'), style: context.tt.bodyLarge))
-        else ...[
-          Panel(
-            color: vBg,
-            padding: const EdgeInsets.all(22),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Icon(vIcon, color: vColor, size: 30),
-                const SizedBox(width: 10),
-                Expanded(child: Text(context.s('result$verdict'), style: context.tt.titleLarge!.copyWith(color: vColor))),
-              ]),
-              const SizedBox(height: 14),
-              Text(context.s('resultNet'), style: context.tt.bodyMedium),
-              FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(eurSigned(t.net, lang), style: context.tt.displayLarge)),
-              if (s.travellers > 1) Text(context.s('resultPerPerson', {'v': eur(t.net / s.travellers, lang)}), style: context.tt.titleMedium),
-              const SizedBox(height: 8),
-              Text(context.s('result${verdict}Sub'), style: context.tt.bodyLarge),
-            ]),
-          ),
-          const SizedBox(height: 14),
-          Panel(
-            padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
-            child: Column(children: [
-              row(Icons.route_rounded, context.s('rowDistance'), null, '${t.km} km'),
-              Divider(color: c.line),
-              row(Icons.local_gas_station_rounded, context.s('rowFuelTrip'),
-                  '${fmtNum(t.litres, lang)} l × ${eur(t.ltFuel!, lang, digits: 3)}', eurSigned(-t.tripCost, lang), color: c.bad),
-              Divider(color: c.line),
-              if (t.basket.priced > 0)
-                row(Icons.shopping_bag_rounded, context.s('rowShopping'), context.items(t.basket.priced), eurSigned(t.shopping, lang), color: c.good)
-              else
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(children: [
-                    Icon(Icons.shopping_bag_outlined, color: c.text3, size: 26),
-                    const SizedBox(width: 14),
-                    Expanded(child: Text(context.s('rowShoppingNone'), style: context.tt.titleMedium!.copyWith(color: c.text2))),
-                    TextButton(onPressed: () => shellTab.value = 2, child: Text(context.s('resultToList'))),
-                  ]),
-                ),
-              if (s.refuelLitres > 0) ...[
-                Divider(color: c.line),
-                row(Icons.ev_station_rounded, context.s('rowRefuel'),
-                    '${s.refuelLitres} l × ${eur(t.plFuelEur!, lang, digits: 3)}', eurSigned(t.refuelSaving, lang),
-                    color: t.refuelSaving >= 0 ? c.good : c.bad),
-              ],
-              Container(height: 2, color: c.text, margin: const EdgeInsets.symmetric(vertical: 6)),
-              row(Icons.functions_rounded, context.s('rowTotal'), null, eurSigned(t.net, lang)),
-            ]),
-          ),
-          if (t.breakEven != null) ...[
-            const SizedBox(height: 14),
-            Panel(
-              color: c.raised,
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.balance_rounded, color: c.text2),
-                const SizedBox(width: 12),
-                Expanded(child: Text(context.s('breakEven', {'v': eur(t.breakEven!, lang, digits: 0)}), style: context.tt.bodyLarge)),
-              ]),
-            ),
-          ],
-          if (sundayToday || !shopsOpen(sat)) ...[
-            const SizedBox(height: 14),
-            Panel(color: c.badSoft, child: Text(sundayToday ? context.s('tripSunday') : context.s('shopsNextClosed', {'date': dayMonth(sat, lang)}), style: context.tt.bodyLarge)),
-          ],
-        ],
-        const SizedBox(height: 18),
-        BigButton(
-          label: context.s('planTitle'),
-          icon: Icons.map_rounded,
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PlanScreen())),
-        ),
-        const SizedBox(height: 10),
-        BigButton(label: context.s('resultEdit'), icon: Icons.tune_rounded, kind: BtnKind.secondary, onPressed: onEdit),
-        const SizedBox(height: 16),
-        Text(context.s('estimate'), style: context.tt.bodySmall, textAlign: TextAlign.center),
-      ],
-    );
-  }
 }
