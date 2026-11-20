@@ -115,7 +115,7 @@ class MoreScreen extends StatelessWidget {
             ),
             RowTile(icon: Icons.fact_check_outlined, title: context.s('planChecklist'), subtitle: context.s('checklistSub'), onTap: () => push(const ChecklistScreen()), last: true),
           ]),
-          if (Theme.of(context).platform == TargetPlatform.android) ...[
+          if (Theme.of(context).platform == TargetPlatform.android || Theme.of(context).platform == TargetPlatform.iOS) ...[
             SectionTitle(context.s('updTitle')),
             if (s.appUpdate != null) const UpdateBanner() else
             RowGroup(children: [
