@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../data/promo_text.dart' show multibuyUnitPrice;
+
 /// Where the daily collector publishes its output. One JSON file, no keys.
 /// The same host serves `config.json`, the remote off switch.
 /// Published daily by github.com/Zenkiux/zlotika-data (GitHub Actions → Pages).
@@ -55,17 +57,22 @@ class Deal {
 
   double? get discountPct => (oldPrice != null && oldPrice! > price) ? (1 - price / oldPrice!) : null;
 
-  factory Deal.fromJson(Map<String, dynamic> j) => Deal(
+  factory Deal.fromJson(Map<String, dynamic> j) {
+    final raw = (j['price'] as num).toDouble();
+    final old = (j['oldPrice'] as num?)?.toDouble();
+    // "Drugi za 5 zł": count the real price per item when buying the set, not 5 zł.
+    final mb = multibuyUnitPrice(j['multibuy'] as String?, raw, old);
+    return Deal(
         id: j['id'] as String,
         chain: j['chain'] as String,
         name: j['name'] as String,
-        price: (j['price'] as num).toDouble(),
-        oldPrice: (j['oldPrice'] as num?)?.toDouble(),
+        price: mb?.price ?? raw,
+        oldPrice: old,
         unit: j['unit'] as String?,
         unitPrice: (j['unitPrice'] as num?)?.toDouble(),
         card: j['card'] as bool?,
         multibuy: j['multibuy'] as String?,
-        minQty: (j['minQty'] as num?)?.toInt(),
+        minQty: (j['minQty'] as num?)?.toInt() ?? mb?.qty,
         limit: (j['limit'] as num?)?.toInt(),
         validFrom: j['validFrom'] as String?,
         validTo: j['validTo'] as String?,
@@ -80,6 +87,7 @@ class Deal {
         leaflet: j['leaflet'] as String?,
         page: (j['page'] as num?)?.toInt(),
       );
+  }
 }
 
 /// A retailer leaflet shown in the in-app reader. Images load from the retailer's servers.

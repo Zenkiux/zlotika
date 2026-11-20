@@ -8,11 +8,13 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/chains.dart';
 import '../../data/dictionary.dart';
+import '../../data/promo_text.dart';
 import '../../services/deals.dart';
 import '../more/more_screen.dart' show SettingsButton;
 import '../../widgets/ui.dart';
 import '../list/add_item_screen.dart' show newId;
-import '../list/deal_pick.dart' show showAddedSnack;
+import '../list/deal_pick.dart' show showAddedSnack, shortDealName;
+import '../../main.dart' show shellTab, Tabs;
 import 'leaflet_reader.dart';
 
 String agoText(BuildContext context, DateTime t) {
@@ -20,6 +22,12 @@ String agoText(BuildContext context, DateTime t) {
   if (h < 1) return context.s('agoNow');
   if (h < 24) return context.s('agoH', {'n': h});
   return context.s('agoD', {'n': h ~/ 24});
+}
+
+/// Biggest real discounts first. Above 80 % is almost always a misread leaflet, so it doesn't jump the queue.
+double _sortPct(Deal d) {
+  final p = d.discountPct ?? 0;
+  return p > .8 ? 0 : p;
 }
 
 String? dealTranslation(BuildContext context, Deal d) {
@@ -82,7 +90,7 @@ class _DealsScreenState extends State<DealsScreen> {
       final hay = foldText('${d.name} ${tr?.lt ?? ''} ${tr?.en ?? ''} ${chainById(d.chain)?.name ?? ''}');
       return query.split(RegExp(r'\s+')).every(hay.contains);
     }).toList()
-      ..sort((a, b) => (b.discountPct ?? 0).compareTo(a.discountPct ?? 0));
+      ..sort((a, b) => _sortPct(b).compareTo(_sortPct(a)));
 
     return SafeArea(
       bottom: false,
@@ -92,17 +100,27 @@ class _DealsScreenState extends State<DealsScreen> {
         onRefresh: s.refreshFeed,
         child: CustomScrollView(slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
             sliver: SliverList.list(children: [
               PageHeader(
                 context.s('dealsTitle'),
                 subtitle: s.feed != null ? context.s('dealsUpdated', {'ago': agoText(context, s.feed!.generatedAt)}) : context.s('leafletsSub'),
                 trailing: const SettingsButton(),
               ),
-              Segmented<int>(
-                value: _view,
-                options: [(0, context.s('dealsTabDeals')), (1, context.s('dealsTabLeaflets'))],
-                onChanged: (v) => setState(() => _view = v),
+              Panel(
+                onTap: () => setState(() => _view = _view == 0 ? 1 : 0),
+                padding: const EdgeInsets.fromLTRB(15, 13, 12, 13),
+                child: Row(children: [
+                  IconTile(_view == 0 ? Icons.menu_book_outlined : Icons.local_offer_outlined, tone: Tone.accent),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(context.s(_view == 0 ? 'leafletsBanner' : 'dealsBanner'), style: context.tt.titleMedium),
+                      Text(context.s(_view == 0 ? 'leafletsBannerSub' : 'dealsBannerSub'), style: context.tt.bodyMedium!.copyWith(fontSize: 13)),
+                    ]),
+                  ),
+                  Icon(Icons.chevron_right_rounded, size: 20, color: c.text3),
+                ]),
               ),
               const SizedBox(height: 14),
             ]),
@@ -111,7 +129,7 @@ class _DealsScreenState extends State<DealsScreen> {
             const _Leaflets()
           else if (all.isEmpty)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               sliver: SliverList.list(children: [
                 Panel(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -132,7 +150,7 @@ class _DealsScreenState extends State<DealsScreen> {
             )
           else ...[
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList.list(children: [
                 TextField(
                   controller: _q,
@@ -149,10 +167,10 @@ class _DealsScreenState extends State<DealsScreen> {
             ),
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 48,
+                height: 40,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: [
                     if (s.tripChains.isNotEmpty)
                       _ChainChip(label: context.s('dealsMine'), selected: mine, onTap: () => setState(() {
@@ -176,7 +194,7 @@ class _DealsScreenState extends State<DealsScreen> {
               )
             else
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
                 sliver: SliverList.builder(itemCount: list.length, itemBuilder: (_, i) => DealCard(deal: list[i])),
               ),
           ],
@@ -194,22 +212,7 @@ class _ChainChip extends StatelessWidget {
   final Color? color;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(right: 8),
-        child: ChoiceChip(
-          label: Row(mainAxisSize: MainAxisSize.min, children: [
-            if (color != null) ...[Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)), const SizedBox(width: 8)],
-            Text(label),
-          ]),
-          labelStyle: context.tt.titleMedium!.copyWith(color: selected ? Brand.ink : context.c.text, fontSize: 15),
-          selected: selected,
-          showCheckmark: false,
-          selectedColor: Brand.yellow,
-          backgroundColor: context.c.surface,
-          side: BorderSide(color: selected ? Brand.yellow : context.c.line),
-          onSelected: (_) => onTap(),
-        ),
-      );
+  Widget build(BuildContext context) => Center(child: FilterChip2(label: label, active: selected, onTap: onTap, dot: color));
 }
 
 class DealCard extends StatelessWidget {
@@ -227,48 +230,94 @@ class DealCard extends StatelessWidget {
     final tr = dealTranslation(context, deal);
     final pct = deal.discountPct;
     final chain = chainById(deal.chain);
+    final locked = deal.card == true && !s.cards.contains(deal.chain);
+    final inList = s.items.any((i) => i.dealId == deal.id);
+    final lt = s.ltFor(ListItem(id: '', name: tr ?? deal.name, plName: deal.name, dealId: deal.id));
+
+    void add() {
+      s.addItem(ListItem(id: newId(), name: tr ?? shortDealName(deal.name), plName: deal.name, dealId: deal.id));
+      showAddedSnack(context, tr ?? shortDealName(deal.name), deal.chain);
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Panel(
-        onTap: () => showDealSheet(context, deal),
-        padding: const EdgeInsets.all(16),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          ChainBadge(deal.chain),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(deal.name, maxLines: 3, overflow: TextOverflow.ellipsis, style: context.tt.titleMedium),
-              if (tr != null) ...[
-                const SizedBox(height: 3),
-                Text('≈ $tr', style: context.tt.bodyMedium!.copyWith(color: c.text2)),
-              ],
-              const SizedBox(height: 8),
-              Wrap(spacing: 6, runSpacing: 6, children: [
-                if (deal.card == true) Pill(chain?.card != null ? context.s('dealsCard', {'card': chain!.card!}) : context.s('dealsCardGeneric'), fg: c.bad, bg: c.badSoft, icon: Icons.credit_card_rounded),
-                if (deal.multibuy != null) Pill(deal.multibuy!, fg: Brand.ink, bg: Brand.yellow),
-                if (deal.minQty != null && deal.minQty! > 1) Pill(context.s('dealsMinQty', {'n': deal.minQty!}), fg: c.text2, bg: c.raised),
-                if (deal.validTo != null)
-                  Pill(context.s('dealsUntil', {'date': dayMonth(DateTime.parse(deal.validTo!), lang)}), fg: c.text2, bg: c.raised, icon: Icons.event_rounded),
-                if (fixed) Pill(context.s('dealsFix'), fg: c.good, bg: c.goodSoft, icon: Icons.edit_rounded),
-                if (deal.ocr) Pill(context.s('dealOcr'), fg: c.text2, bg: c.raised, icon: Icons.menu_book_rounded),
+      child: Opacity(
+        opacity: locked ? .78 : 1,
+        child: Panel(
+          onTap: () => showDealSheet(context, deal),
+          padding: const EdgeInsets.fromLTRB(15, 15, 15, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    if (chain != null) ...[Dot(chain.color), const SizedBox(width: 6)],
+                    Text(chain?.name ?? deal.chain, style: context.tt.labelMedium!.copyWith(fontWeight: FontWeight.w700, fontSize: 12)),
+                    if (deal.validTo != null)
+                      Flexible(
+                        child: Text(' · ${context.s('dealsUntil', {'date': dayMonth(DateTime.parse(deal.validTo!), lang)})}',
+                            overflow: TextOverflow.ellipsis, style: context.tt.bodySmall!.copyWith(fontSize: 11.5)),
+                      ),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(tr ?? shortDealName(deal.name), maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.titleMedium),
+                  if ((tr ?? shortDealName(deal.name)) != deal.name) PlName(deal.name, maxLines: 2),
+                ]),
+              ),
+              const SizedBox(width: 12),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text(zl(price, lang), style: context.tt.headlineSmall!.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                if (eurV != null) Text(eur(eurV, lang), style: context.tt.bodySmall!.copyWith(color: c.text2, fontSize: 12.5)),
+                if (deal.oldPrice != null && !fixed)
+                  Text(zl(deal.oldPrice!, lang), style: context.tt.bodySmall!.copyWith(decoration: TextDecoration.lineThrough, fontSize: 11.5)),
               ]),
             ]),
-          ),
-          const SizedBox(width: 10),
-          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            if (pct != null && pct >= .05)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                margin: const EdgeInsets.only(bottom: 6),
-                decoration: BoxDecoration(color: Brand.plRed, borderRadius: BorderRadius.circular(8)),
-                child: Text('−${(pct * 100).round()}%', style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700, color: Colors.white, fontSize: 13)),
+            const SizedBox(height: 10),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              if (pct != null && pct >= .05 && pct <= .8) Pill('−${(pct * 100).round()} %', tone: Tone.bad),
+              if (deal.unit != null && deal.unitPrice != null) Pill('${zl(deal.unitPrice!, lang)}/${deal.unit}'),
+              if (lt != null) Pill('LT ≈ ${eur(lt.price, lang)}', tone: Tone.good),
+              if (deal.card == true)
+                Pill(chain?.card ?? context.s('dealsCardGeneric'), tone: locked ? Tone.warn : Tone.accent, icon: locked ? Icons.lock_outline_rounded : Icons.credit_card_rounded),
+              if (deal.multibuy != null) Pill(promoText(deal.multibuy!, lang), tone: Tone.accent),
+              if (deal.minQty != null && deal.minQty! > 1) Pill(context.s('dealsMinQty', {'n': deal.minQty!})),
+              if (fixed) Pill(context.s('dealsFix'), tone: Tone.good, icon: Icons.edit_outlined),
+              if (deal.leaflet != null && deal.page != null) Pill(context.s('dealLeafletPage', {'p': deal.page!}), icon: Icons.menu_book_outlined)
+              else if (deal.ocr) Pill(context.s('dealOcr'), icon: Icons.menu_book_outlined),
+            ]),
+            const SizedBox(height: 10),
+            Container(height: 1, color: c.line),
+            const SizedBox(height: 8),
+            Row(children: [
+              GestureDetector(
+                onTap: () => showDealSheet(context, deal),
+                child: Text(context.s('dealFixShort'), style: context.tt.labelMedium!.copyWith(fontSize: 12)),
               ),
-            Text(zl(price, lang), style: context.tt.titleLarge),
-            if (eurV != null) Text('≈ ${eur(eurV, lang)}', style: context.tt.bodyMedium),
-            if (deal.oldPrice != null && !fixed)
-              Text(zl(deal.oldPrice!, lang), style: context.tt.bodySmall!.copyWith(decoration: TextDecoration.lineThrough)),
+              const Spacer(),
+              Press(
+                onTap: locked ? () => shellTab.value = Tabs.cards : (inList ? null : add),
+                scale: .95,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  decoration: BoxDecoration(
+                    color: locked ? c.raised : inList ? c.goodSoft : c.accent,
+                    borderRadius: BorderRadius.circular(10),
+                    border: locked ? Border.all(color: c.line) : null,
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(locked ? Icons.add_card_rounded : inList ? Icons.check_rounded : Icons.add_rounded, size: 16, color: locked ? c.text : inList ? c.good : c.onAccent),
+                    const SizedBox(width: 5),
+                    Text(
+                      locked ? (chain?.card ?? '') : context.s(inList ? 'dealInList' : 'dealAdd'),
+                      style: context.tt.labelMedium!.copyWith(fontSize: 13, fontWeight: FontWeight.w700, color: locked ? c.text : inList ? c.good : c.onAccent),
+                    ),
+                  ]),
+                ),
+              ),
+            ]),
           ]),
-        ]),
+        ),
       ),
     );
   }
@@ -378,7 +427,10 @@ class _DealSheetState extends State<_DealSheet> {
         const SizedBox(height: 12),
         if (d.card == true)
           _Note(Icons.credit_card_rounded, chain?.card != null ? context.s('dealsCard', {'card': chain!.card!}) : context.s('dealsCardGeneric'), c.bad),
-        if (d.multibuy != null) _Note(Icons.local_offer_rounded, d.multibuy!, c.warn),
+        if (d.multibuy != null) ...[
+          _Note(Icons.local_offer_rounded, promoText(d.multibuy!, lang), c.warn),
+          Padding(padding: const EdgeInsets.only(left: 34, bottom: 4), child: PlName(d.multibuy!)),
+        ],
         if (d.minQty != null && d.minQty! > 1) _Note(Icons.shopping_basket_rounded, context.s('dealsMinQty', {'n': d.minQty!}), c.text2),
         if (d.limit != null) _Note(Icons.block_rounded, context.s('dealsLimit', {'n': d.limit!}), c.text2),
         if (d.validTo != null) _Note(Icons.event_rounded, context.s('dealsUntil', {'date': dayMonth(DateTime.parse(d.validTo!), lang)}), c.text2),

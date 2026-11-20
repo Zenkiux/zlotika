@@ -4,21 +4,22 @@ import 'package:flutter/material.dart';
 /// printed as a barcode can be copied; app-only codes that change every minute
 /// (Żappka) can't, so for those we open the shop's own app instead.
 class CardType {
-  const CardType(this.id, this.name, this.program, this.color, this.ink, {this.chain, this.appUrl, this.dynamicCode = false});
+  const CardType(this.id, this.name, this.program, this.color, this.ink, {this.chain, this.appUrl, this.dynamicCode = false, this.gradient = const [Color(0xFF334155), Color(0xFF1E293B)]});
   final String id, name, program;
   final Color color, ink;
+  final List<Color> gradient; // the wallet card's background
   final String? chain; // app chain id, so deals that need this card unlock
   final String? appUrl; // shop's own app / page
   final bool dynamicCode; // code in the shop's app changes; a copy wouldn't scan
 }
 
 const cardTypes = <CardType>[
-  CardType('biedronka', 'Biedronka', 'Moja Biedronka', Color(0xFFD7172F), Colors.white, chain: 'biedronka', appUrl: 'https://www.biedronka.pl/pl/moja-biedronka'),
-  CardType('kaufland', 'Kaufland', 'Kaufland Card', Color(0xFFE10915), Colors.white, chain: 'kaufland', appUrl: 'https://www.kaufland.pl/kaufland-card.html'),
-  CardType('aldi', 'Aldi', 'ALDI', Color(0xFF00205B), Colors.white, chain: 'aldi', appUrl: 'https://www.aldi.pl/'),
-  CardType('zabka', 'Żabka', 'Żappka', Color(0xFF1F7A3A), Colors.white, appUrl: 'https://www.zabka.pl/zappka', dynamicCode: true),
-  CardType('lidl', 'Lidl', 'Lidl Plus', Color(0xFF0050AA), Color(0xFFFFF000), chain: 'lidl', appUrl: 'https://www.lidl.pl/c/lidl-plus/s10007388'),
-  CardType('rossmann', 'Rossmann', 'Rossmann Klub', Color(0xFFC8102E), Colors.white, chain: 'rossmann', appUrl: 'https://www.rossmann.pl/'),
+  CardType('biedronka', 'Biedronka', 'Moja Biedronka', Color(0xFFD7172F), Colors.white, chain: 'biedronka', appUrl: 'https://www.biedronka.pl/pl/moja-biedronka', gradient: [Color(0xFFBE123C), Color(0xFF9F1239)]),
+  CardType('kaufland', 'Kaufland', 'Kaufland Card', Color(0xFFE10915), Colors.white, chain: 'kaufland', appUrl: 'https://www.kaufland.pl/kaufland-card.html', gradient: [Color(0xFFB91C1C), Color(0xFF7F1D1D)]),
+  CardType('aldi', 'Aldi', 'ALDI', Color(0xFF00205B), Colors.white, chain: 'aldi', appUrl: 'https://www.aldi.pl/', gradient: [Color(0xFF0369A1), Color(0xFF0C4A6E)]),
+  CardType('zabka', 'Żabka', 'Żappka', Color(0xFF1F7A3A), Colors.white, appUrl: 'https://www.zabka.pl/zappka', dynamicCode: true, gradient: [Color(0xFF047857), Color(0xFF064E3B)]),
+  CardType('lidl', 'Lidl', 'Lidl Plus', Color(0xFF0050AA), Color(0xFFFFF000), chain: 'lidl', appUrl: 'https://www.lidl.pl/c/lidl-plus/s10007388', gradient: [Color(0xFF1D4ED8), Color(0xFF1E3A8A)]),
+  CardType('rossmann', 'Rossmann', 'Rossmann Klub', Color(0xFFC8102E), Colors.white, chain: 'rossmann', appUrl: 'https://www.rossmann.pl/', gradient: [Color(0xFFC2410C), Color(0xFF9A3412)]),
   CardType('other', 'Kita', '', Color(0xFF3A3D4A), Colors.white),
 ];
 

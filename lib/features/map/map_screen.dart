@@ -240,7 +240,7 @@ Future<void> _filters(BuildContext context) => showSheet(context, (ctx) {
               },
               controlAffinity: ListTileControlAffinity.trailing,
               contentPadding: EdgeInsets.zero,
-              secondary: leading,
+              secondary: leading ?? const SizedBox(width: 30, height: 30, child: Icon(Icons.local_gas_station_rounded)),
               title: Text(title, style: ctx.tt.titleMedium),
             );
         bool chainOn(String id) => s.mapChains.isEmpty || s.mapChains.contains(id);
@@ -254,7 +254,7 @@ Future<void> _filters(BuildContext context) => showSheet(context, (ctx) {
             Text(ctx.s('mapFilterSub'), style: ctx.tt.bodyMedium),
             SectionTitle(ctx.s('mapShops')),
             for (final ch in list)
-              check(ch.name, chainOn(ch.id), leading: _Pin(Store(id: '', chain: ch.id, brand: ch.name, town: '', lat: 0, lon: 0)), () {
+              check(ch.name, chainOn(ch.id), leading: SizedBox(width: 30, height: 30, child: _Pin(Store(id: '', chain: ch.id, brand: ch.name, town: '', lat: 0, lon: 0))), () {
                 s.update((x) {
                   if (x.mapChains.isEmpty) x.mapChains.addAll(list.map((e) => e.id));
                   x.mapChains.contains(ch.id) ? x.mapChains.remove(ch.id) : x.mapChains.add(ch.id);

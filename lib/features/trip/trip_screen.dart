@@ -519,6 +519,9 @@ class _Overview extends StatelessWidget {
     final shopStops = stops.where((x) => !x.fuel).toList();
     final open = s.items.where((e) => !e.checked).length;
     final r = s.rate;
+    final t = TripCalc(s);
+    final usable = s.deals.where(s.dealUsable).length;
+    final cardsHeld = s.wallet.length;
 
     return RefreshIndicator(
       color: Brand.ink,
@@ -527,81 +530,262 @@ class _Overview extends StatelessWidget {
         await Future.wait([s.refreshRate(), s.refreshFeed()]);
       },
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
-          PageHeader(
-            '${s.origin.name} → ${destById(s.destId).name}',
-            eyebrow: _dayLabel(context, day),
-            subtitle: r == null ? null : '1 € = ${fmtNum(r.mid, lang, digits: 2)} zł · ${s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ')}',
-            trailing: const SettingsButton(),
-          ),
-          const _PriceCheck(),
-          const SizedBox(height: 12),
-          const _TripFacts(),
-          const SizedBox(height: 12),
+          PageHeader(context.s('tabTrip'), subtitle: '${_dayLabel(context, day)} · ${s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ')}', trailing: const SettingsButton()),
+          _Hero(day: day, stops: shopStops),
           if (lawClosed) ...[
-            Panel(
-              color: c.badSoft,
-              child: Row(children: [
-                Icon(Icons.block_rounded, color: c.bad, size: 28),
-                const SizedBox(width: 12),
-                Expanded(child: Text(context.s(law == ShopDay.holiday ? 'planDayHoliday' : 'planDaySunday'), style: context.tt.bodyLarge)),
-              ]),
+            const SizedBox(height: 12),
+            AlertBanner(title: context.s(law == ShopDay.holiday ? 'heroHoliday' : 'heroSunday'), body: context.s(law == ShopDay.holiday ? 'planDayHoliday' : 'planDaySunday')),
+          ],
+          const SizedBox(height: 12),
+          const _ConvertBar(),
+          SectionTitle(context.s('quickAccess')),
+          RowGroup(children: [
+            RowTile(
+              icon: Icons.format_list_bulleted_rounded,
+              tone: Tone.accent,
+              title: context.s('listRowTitle'),
+              subtitle: open == 0
+                  ? context.s('listRowEmpty')
+                  : '${context.items(open)}${t.basket.priced > 0 && r != null ? ' · ${context.s('listRowSave', {'v': eur(t.shopping, lang)})}' : ''}',
+              onTap: () => shellTab.value = Tabs.list,
             ),
-            const SizedBox(height: 12),
-          ],
-          const _Result(),
-          SectionTitle(context.s('planStops', {'n': stops.length})),
-          for (var i = 0; i < stops.length; i++) _StopCard(n: i + 1, stop: stops[i], day: day, canRemove: stops[i].fuel || s.tripChains.length > 1),
-          Row(children: [
-            Expanded(child: BigButton(label: context.s('tripAddShop'), icon: Icons.add_business_rounded, kind: BtnKind.secondary, onPressed: () => _addShop(context))),
-            if (s.refuelLitres == 0) ...[
-              const SizedBox(width: 10),
-              Expanded(
-                child: BigButton(
-                  label: context.s('tripAddFuel'),
-                  icon: Icons.local_gas_station_rounded,
-                  kind: BtnKind.secondary,
-                  onPressed: () => s.update((x) => x.refuelLitres = 40),
-                ),
-              ),
-            ],
+            RowTile(
+              icon: Icons.local_gas_station_rounded,
+              tone: Tone.blue,
+              title: '${context.s('fuelRowTitle')} · ${_fuelName(context, s.fuel)}',
+              subtitle: t.ready
+                  ? 'PL ${eur(t.plFuelEur!, lang, digits: 3)}/l · LT ${eur(t.ltFuel!, lang, digits: 3)}/l${s.refuelLitres > 0 ? ' · ${eurSigned(t.refuelSaving, lang)}' : ''}'
+                  : context.s('rateNone'),
+              onTap: () => _fuelSheet(context),
+            ),
+            RowTile(
+              icon: Icons.local_offer_rounded,
+              tone: Tone.good,
+              title: context.s('dealsRowTitle'),
+              subtitle: context.s('dealsRowSub', {'n': usable}),
+              onTap: () => shellTab.value = Tabs.deals,
+            ),
+            RowTile(
+              icon: Icons.credit_card_rounded,
+              title: context.s('cardsRowTitle'),
+              subtitle: cardsHeld > 0
+                  ? context.s('cardsRowSub', {'n': cardsHeld})
+                  : s.cards.isNotEmpty
+                      ? context.s('cardsRowAddCode', {'c': s.cards.map((x) => chainById(x)?.card ?? x).join(', ')})
+                      : context.s('cardsRowNone'),
+              onTap: () => shellTab.value = Tabs.cards,
+              last: true,
+            ),
           ]),
-          if (!lawClosed) ...[
-            const SizedBox(height: 12),
-            _Timing(day: day, stops: shopStops),
+          SectionTitle(context.s('pcTitle')),
+          const _PriceCheck(),
+          SectionTitle(context.s('tripFactsLbl'), action: context.s('editTrip'), onAction: () => s.update((x) => x.tripReady = false)),
+          const _TripFacts(),
+          if (s.items.any((e) => !e.checked)) ...[
+            SectionTitle(context.s('calcLbl')),
+            const _Result(),
           ],
-          const SizedBox(height: 20),
-          if (stops.any((x) => x.store != null)) ...[
-            BigButton(label: context.s('planRoute'), icon: Icons.alt_route_rounded, onPressed: () => _open(_routeUrl(s, stops))),
-            const SizedBox(height: 10),
-          ],
-          BigButton(
-            label: context.s('tripList', {'n': open}),
-            icon: Icons.shopping_bag_rounded,
-            kind: BtnKind.secondary,
-            onPressed: () => shellTab.value = Tabs.list,
-          ),
+          SectionTitle(context.s('planStops', {'n': stops.length})),
+          RowGroup(children: [
+            for (var i = 0; i < stops.length; i++)
+              _StopCard(n: i + 1, stop: stops[i], day: day, canRemove: stops[i].fuel || s.tripChains.length > 1, last: i == stops.length - 1),
+          ]),
           const SizedBox(height: 10),
-          BigButton(
-            label: context.s('planChecklist'),
-            icon: Icons.fact_check_rounded,
-            kind: BtnKind.secondary,
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChecklistScreen())),
+          Pair(
+            BigButton(label: context.s('tripAddShop'), icon: Icons.add_business_rounded, kind: BtnKind.secondary, onPressed: () => _addShop(context)),
+            s.refuelLitres == 0
+                ? BigButton(label: context.s('tripAddFuel'), icon: Icons.local_gas_station_rounded, kind: BtnKind.secondary, onPressed: () => s.update((x) => x.refuelLitres = 40))
+                : BigButton(label: context.s('planOpenMap'), icon: Icons.map_outlined, kind: BtnKind.secondary, onPressed: () => shellTab.value = Tabs.map),
           ),
-          if (s.items.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            BigButton(label: context.s('finishOpen'), icon: Icons.flag_rounded, kind: BtnKind.secondary, onPressed: () => showFinishTrip(context)),
+          if (stops.any((x) => x.store != null)) ...[
+            const SizedBox(height: 16),
+            BigButton(label: context.s('planRoute'), icon: Icons.alt_route_rounded, onPressed: () => _open(_routeUrl(s, stops))),
           ],
+          const SizedBox(height: 10),
+          Pair(
+            BigButton(
+              label: context.s('planChecklistShort'),
+              kind: BtnKind.secondary,
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChecklistScreen())),
+            ),
+            BigButton(label: context.s('finishShort'), kind: BtnKind.secondary, onPressed: s.items.isEmpty ? null : () => showFinishTrip(context)),
+          ),
           const SizedBox(height: 18),
           if (r != null) Text(context.s('convRate', {'r': fmtNum(r.mid, lang, digits: 4), 'd': r.date}), style: context.tt.bodySmall, textAlign: TextAlign.center),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(context.s('estimate'), style: context.tt.bodySmall, textAlign: TextAlign.center),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(context.s('planOsm', {'date': s.storeFeed?.generatedAt == null ? '—' : dayMonth(s.storeFeed!.generatedAt!.toLocal(), lang)}),
-              style: context.tt.bodySmall, textAlign: TextAlign.center),
+              style: context.tt.bodySmall!.copyWith(color: c.text3), textAlign: TextAlign.center),
         ],
       ),
+    );
+  }
+}
+
+/// Latest sensible departure (LT time) for the day's shops.
+({int? latest, bool late, int? opens, int? closes, int driveMin}) _leaveBy(AppState s, DateTime day, List<_Stop> stops) {
+  final p = plNow();
+  final isToday = day.year == p.year && day.month == p.month && day.day == p.day;
+  final km = s.origin.km[s.destId] ?? 0;
+  final driveMin = (km / _avgKmh * 60).round();
+  final f = s.storeFeed;
+  int? opens, closes;
+  for (final x in stops) {
+    if (x.store == null || f == null) continue;
+    final h = dayHours(f.hoursOf(x.store!).hours, day);
+    if (h.kind != HoursKind.open) continue;
+    opens = opens == null ? h.opens : (h.opens! > opens ? h.opens : opens);
+    closes = closes == null ? h.closes : (h.closes! < closes ? h.closes : closes);
+  }
+  final latest = closes == null ? null : closes + 60 - driveMin - _minutesPerShop * stops.length;
+  final now = DateTime.now();
+  final late = isToday && latest != null && now.hour * 60 + now.minute > latest;
+  return (latest: latest, late: late, opens: opens, closes: closes, driveMin: driveMin);
+}
+
+/// The yellow card: when to leave, the route, and whether the trip pays off.
+class _Hero extends StatelessWidget {
+  const _Hero({required this.day, required this.stops});
+  final DateTime day;
+  final List<_Stop> stops;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final lang = context.lang;
+    final t = TripCalc(s);
+    final lb = _leaveBy(s, day, stops);
+    final law = shopDay(day);
+    final lawClosed = law == ShopDay.sundayClosed || law == ShopDay.holiday;
+    const ink = Brand.ink;
+    final soft = ink.withValues(alpha: .72);
+    final hasPrices = t.ready && t.basket.priced > 0;
+
+    String leave;
+    if (lawClosed) {
+      leave = context.s('heroClosed');
+    } else if (lb.latest == null || lb.latest! <= 0) {
+      leave = '—';
+    } else {
+      leave = lb.late ? context.s('heroLate') : fmtMin(lb.latest!);
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(begin: Alignment(-.6, -1), end: Alignment(.6, 1), colors: [Color(0xFFF7CB4D), Brand.yellowDeep]),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(color: Color(0x29F5C43D), blurRadius: 30, offset: Offset(0, 12))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.s('leaveBy'), style: context.tt.labelMedium!.copyWith(color: soft, fontSize: 12)),
+              const SizedBox(height: 2),
+              Text(leave, style: context.tt.displayMedium!.copyWith(color: ink, fontSize: 28, letterSpacing: -.85, fontFeatures: const [FontFeature.tabularFigures()])),
+              if (lb.opens != null && lb.closes != null && !lawClosed)
+                Text(context.s('heroHours', {'from': fmtMin(lb.opens! + 60), 'to': fmtMin(lb.closes! + 60), 'h': fmtNum(lb.driveMin / 60, lang)}),
+                    style: context.tt.bodySmall!.copyWith(color: soft)),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(color: ink.withValues(alpha: .11), borderRadius: BorderRadius.circular(999)),
+            child: Text('${s.origin.name} → ${s.dest.name}', style: context.tt.labelMedium!.copyWith(color: ink, fontSize: 12)),
+          ),
+        ]),
+        Container(height: 1, color: ink.withValues(alpha: .12), margin: const EdgeInsets.fromLTRB(0, 14, 0, 12)),
+        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.s('netSaving'), style: context.tt.labelMedium!.copyWith(color: soft, fontSize: 12)),
+              const SizedBox(height: 1),
+              if (hasPrices)
+                Text(eurSigned(t.net, lang), style: context.tt.headlineMedium!.copyWith(color: ink, fontSize: 24, fontFeatures: const [FontFeature.tabularFigures()]))
+              else
+                Text(context.s(s.items.any((e) => !e.checked) ? 'heroNoPrices' : 'heroNoItems'), style: context.tt.titleMedium!.copyWith(color: ink)),
+              if (hasPrices && s.travellers > 1) Text(context.s('resultPerPerson', {'v': eur(t.net / s.travellers, lang)}), style: context.tt.bodySmall!.copyWith(color: soft)),
+            ]),
+          ),
+          if (hasPrices && t.breakEven != null && t.breakEven! > 0)
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(context.s('breakevenLbl'), style: context.tt.bodySmall!.copyWith(color: ink.withValues(alpha: .78))),
+              Text(context.s('breakevenVal', {'v': eur(t.breakEven!, lang, digits: 0)}), style: context.tt.labelMedium!.copyWith(color: ink, fontWeight: FontWeight.w700)),
+            ])
+          else if (!hasPrices)
+            GestureDetector(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddItemScreen(), fullscreenDialog: true)),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(color: ink, borderRadius: BorderRadius.circular(10)),
+                child: Text('+ ${context.s('listAdd')}', style: context.tt.labelMedium!.copyWith(color: Brand.yellow)),
+              ),
+            ),
+        ]),
+      ]),
+    );
+  }
+}
+
+/// Type a price in złoty, see it in euro (NBP rate plus the card fee).
+class _ConvertBar extends StatefulWidget {
+  const _ConvertBar();
+
+  @override
+  State<_ConvertBar> createState() => _ConvertBarState();
+}
+
+class _ConvertBarState extends State<_ConvertBar> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final v = double.tryParse(_ctrl.text.replaceAll(',', '.').trim());
+    final e = v == null ? null : s.toEur(v);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: c.line)),
+      child: Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: context.tt.titleMedium!.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: context.s('convHint'),
+              fillColor: c.raised,
+              suffixText: 'zł',
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.line)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(11), borderSide: BorderSide(color: c.line)),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        const SizedBox(width: 12),
+        ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 96),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(e == null ? eur(0, lang) : eur(e, lang), style: context.tt.titleLarge!.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+            Text(s.rate == null ? '—' : '1 € = ${fmtNum(s.rate!.mid, lang, digits: 2)} zł', style: context.tt.bodySmall!.copyWith(fontSize: 11)),
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -631,7 +815,7 @@ Future<void> _addShop(BuildContext context) => showSheet(context, (ctx) {
       );
     });
 
-/// Where, when, which car, which cards — each line opens just that question.
+/// Where, when, which car, which cards — each row opens just that question.
 class _TripFacts extends StatelessWidget {
   const _TripFacts();
 
@@ -644,65 +828,56 @@ class _TripFacts extends StatelessWidget {
     final held = cardChains.where((x) => s.cards.contains(x.id)).map((x) => x.card!).toList();
     final dayOpen = shopsOpen(s.tripDay);
 
-    Widget row(IconData icon, String label, String value, VoidCallback onTap, {Color? color}) => InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
-            child: Row(children: [
-              Icon(icon, size: 24, color: color ?? c.text2),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(label, style: context.tt.bodySmall),
-                  Text(value, style: context.tt.titleMedium!.copyWith(color: color)),
-                ]),
-              ),
-              Icon(Icons.edit_rounded, size: 20, color: c.text3),
-            ]),
-          ),
-        );
-
-    return Panel(
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
-      child: Column(children: [
-        row(Icons.route_rounded, context.s('tripRouteRow'), '${s.origin.name} → ${s.dest.name} · ${s.origin.km[s.destId] ?? '?'} km', () {
-          _editSheet(context, 'tripRouteRow', (close) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(context.s('tripFromRow'), style: context.tt.titleMedium),
-                const SizedBox(height: 8),
-                const _FromChips(),
-                const SizedBox(height: 18),
-                Text(context.s('tripTo'), style: context.tt.titleMedium),
-                const SizedBox(height: 8),
-                _DestPicker(onPicked: close),
-              ]));
-        }),
-        Divider(color: c.line, height: 1),
-        row(Icons.event_rounded, context.s('tripDayRow'), _dayLabel(context, s.tripDay), () {
-          _editSheet(context, 'tripDay', (close) => _DayPicker(onPicked: close), sub: 'tripDaySub');
-        }, color: dayOpen ? null : c.bad),
-        Divider(color: c.line, height: 1),
-        row(
-          Icons.directions_car_rounded,
-          context.s('tripCarRow'),
-          context.s('tripCarVal', {'fuel': _fuelName(context, s.fuel), 'c': fmtNum(s.consumption, lang)}) +
-              (s.travellers > 1 ? context.s('tripCarPeople', {'n': s.travellers}) : ''),
-          () => _editSheet(context, 'tripCar', (_) => const _CarForm()),
+    return RowGroup(children: [
+      RowTile(
+        title: context.s('tripRouteRow'),
+        subtitle: '${s.origin.name} → ${s.dest.name} · ${context.s('kmRound', {'km': (s.origin.km[s.destId] ?? 0) * 2})}',
+        onTap: () => _editSheet(context, 'tripRouteRow', (close) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.s('tripFromRow'), style: context.tt.titleMedium),
+              const SizedBox(height: 8),
+              const _FromChips(),
+              const SizedBox(height: 18),
+              Text(context.s('tripTo'), style: context.tt.titleMedium),
+              const SizedBox(height: 8),
+              _DestPicker(onPicked: close),
+            ])),
+      ),
+      RowTile(
+        title: context.s('tripShopsRow'),
+        subtitle: s.tripChains.map((x) => chainById(x)?.name ?? x).join(', '),
+        onTap: () => _editSheet(context, 'tripShopsRow', (_) => const _ShopsPicker()),
+      ),
+      RowTile(
+        title: context.s('tripDayRow'),
+        subtitle: _dayLabel(context, s.tripDay),
+        subtitleColor: dayOpen ? null : c.bad,
+        onTap: () => _editSheet(context, 'tripDay', (close) => _DayPicker(onPicked: close), sub: 'tripDaySub'),
+      ),
+      RowTile(
+        title: context.s('tripCarRow'),
+        subtitle: context.s('tripCarVal', {'fuel': _fuelName(context, s.fuel), 'c': fmtNum(s.consumption, lang)}) +
+            (s.refuelLitres > 0 ? ' · ${context.s('refuelL', {'l': s.refuelLitres})}' : '') +
+            (s.travellers > 1 ? context.s('tripCarPeople', {'n': s.travellers}) : ''),
+        onTap: () => _editSheet(context, 'tripCar', (_) => const _CarForm()),
+      ),
+      RowTile(
+        title: context.s('tripHomeRow'),
+        subtitle: _ltShopName(context, s.ltShop),
+        onTap: () => _editSheet(context, 'tripHome', (close) => _LtShopPicker(onPicked: close), sub: 'tripHomeSub'),
+        last: cardChains.isEmpty,
+      ),
+      if (cardChains.isNotEmpty)
+        RowTile(
+          title: context.s('tripCardsRow'),
+          subtitle: held.isEmpty ? context.s('tripCardsNone') : held.join(', '),
+          onTap: () => _editSheet(context, 'tripCards', (_) => const _CardsPicker(), sub: 'tripCardsSub'),
+          last: true,
         ),
-        Divider(color: c.line, height: 1),
-        row(Icons.storefront_rounded, context.s('tripHomeRow'), _ltShopName(context, s.ltShop),
-            () => _editSheet(context, 'tripHome', (close) => _LtShopPicker(onPicked: close), sub: 'tripHomeSub')),
-        if (cardChains.isNotEmpty) ...[
-          Divider(color: c.line, height: 1),
-          row(Icons.credit_card_rounded, context.s('tripCardsRow'), held.isEmpty ? context.s('tripCardsNone') : held.join(', '),
-              () => _editSheet(context, 'tripCards', (_) => const _CardsPicker(), sub: 'tripCardsSub')),
-        ],
-      ]),
-    );
+    ]);
   }
 }
 
-/// The answer: is it worth it, and how the number is made.
+/// How the net number is made: shopping, fuel there and back, refuelling in Poland.
 class _Result extends StatelessWidget {
   const _Result();
 
@@ -712,29 +887,9 @@ class _Result extends StatelessWidget {
     final c = context.c;
     final lang = context.lang;
     final t = TripCalc(s);
-    final shops = s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ');
     final open = s.items.where((e) => !e.checked).toList();
+    if (open.isEmpty) return const SizedBox.shrink();
 
-    if (open.isEmpty) {
-      return Panel(
-        color: Brand.yellow,
-        padding: const EdgeInsets.all(22),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(context.s('tripNoItems'), style: context.tt.headlineSmall!.copyWith(color: Brand.ink)),
-          const SizedBox(height: 6),
-          Text(context.s('tripNoItemsSub', {'shops': shops}), style: context.tt.bodyLarge!.copyWith(color: Brand.ink.withValues(alpha: .8))),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: Brand.ink, foregroundColor: Brand.yellow, minimumSize: const Size.fromHeight(56)),
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddItemScreen(), fullscreenDialog: true)),
-            icon: const Icon(Icons.add_rounded),
-            label: Text(context.s('listAdd'), style: context.tt.titleMedium!.copyWith(color: Brand.yellow)),
-          ),
-        ]),
-      );
-    }
-
-    // Spend in Poland, from the trip's shops only.
     var pln = 0.0;
     var unknown = 0;
     for (final i in open) {
@@ -746,92 +901,50 @@ class _Result extends StatelessWidget {
       }
     }
     final plEur = s.toEur(pln);
-
-    if (s.rate == null || !t.ready) {
-      return Panel(color: c.warnSoft, child: Text(context.s('rateNone'), style: context.tt.bodyLarge));
-    }
-
-    final verdict = t.basket.priced == 0 ? null : t.net >= 15 ? 'Worth' : t.net >= 0 ? 'Marginal' : 'Not';
-    final (vColor, vBg, vIcon) = switch (verdict) {
-      'Worth' => (c.good, c.goodSoft, Icons.check_circle_rounded),
-      'Marginal' => (c.warn, c.warnSoft, Icons.help_rounded),
-      'Not' => (c.bad, c.badSoft, Icons.cancel_rounded),
-      _ => (c.text2, c.raised, Icons.info_rounded),
-    };
-
-    Widget row(IconData icon, String label, String? sub, String value, {Color? color, VoidCallback? onTap}) => InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 9),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Icon(icon, color: c.text2, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(label, style: context.tt.titleMedium),
-                  if (sub != null) Text(sub, style: context.tt.bodyMedium),
-                ]),
-              ),
-              const SizedBox(width: 10),
-              Text(value, style: context.tt.titleMedium!.copyWith(color: color, fontWeight: FontWeight.w700)),
-            ]),
-          ),
-        );
+    if (s.rate == null || !t.ready) return AlertBanner(title: context.s('rateNone'), tone: Tone.warn);
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Panel(
-        color: vBg,
-        padding: const EdgeInsets.all(22),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Icon(vIcon, color: vColor, size: 28),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(verdict == null ? context.s('tripNoPrices') : context.s('result$verdict'),
-                  style: context.tt.titleLarge!.copyWith(color: vColor)),
-            ),
-          ]),
-          if (verdict != null) ...[
-            const SizedBox(height: 12),
-            Text(context.s('resultNet'), style: context.tt.bodyMedium),
-            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(eurSigned(t.net, lang), style: context.tt.displayLarge)),
-            if (s.travellers > 1) Text(context.s('resultPerPerson', {'v': eur(t.net / s.travellers, lang)}), style: context.tt.titleMedium),
-          ] else ...[
-            const SizedBox(height: 8),
-            Text(context.s('tripNoPricesSub', {'shops': shops}), style: context.tt.bodyLarge),
-          ],
-        ]),
-      ),
-      const SizedBox(height: 12),
-      Panel(
-        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-        child: Column(children: [
-          row(Icons.shopping_bag_rounded, context.s('rowShopping'),
-              context.s('tripPriced', {'n': t.basket.priced, 'm': open.length}), eurSigned(t.shopping, lang),
-              color: c.good, onTap: () => shellTab.value = Tabs.list),
-          Divider(color: c.line, height: 1),
-          row(Icons.local_gas_station_rounded, context.s('rowFuelTrip'),
-              '${t.km} km · ${fmtNum(t.litres, lang)} l × ${eur(t.ltFuel!, lang, digits: 3)}', eurSigned(-t.tripCost, lang),
-              color: c.bad, onTap: () => _fuelSheet(context)),
-          if (s.refuelLitres > 0) ...[
-            Divider(color: c.line, height: 1),
-            row(Icons.ev_station_rounded, context.s('rowRefuel'), '${s.refuelLitres} l × ${eur(t.plFuelEur!, lang, digits: 3)}', eurSigned(t.refuelSaving, lang),
-                color: t.refuelSaving >= 0 ? c.good : c.bad, onTap: () => _fuelSheet(context)),
-          ],
-          Container(height: 2, color: c.text, margin: const EdgeInsets.symmetric(vertical: 4)),
-          row(Icons.functions_rounded, context.s('rowTotal'), null, eurSigned(t.net, lang)),
-        ]),
-      ),
-      const SizedBox(height: 8),
+      RowGroup(children: [
+        RowTile(
+          icon: Icons.shopping_bag_outlined,
+          tone: Tone.good,
+          title: context.s('rowShopping'),
+          subtitle: context.s('tripPriced', {'n': t.basket.priced, 'm': open.length}),
+          trailing: Text(eurSigned(t.shopping, lang), style: context.tt.titleMedium!.copyWith(color: c.good, fontWeight: FontWeight.w700)),
+          onTap: () => shellTab.value = Tabs.list,
+        ),
+        RowTile(
+          icon: Icons.route_rounded,
+          tone: Tone.bad,
+          title: context.s('rowFuelTrip'),
+          subtitle: '${t.km} km · ${fmtNum(t.litres, lang)} l × ${eur(t.ltFuel!, lang, digits: 3)}',
+          trailing: Text(eurSigned(-t.tripCost, lang), style: context.tt.titleMedium!.copyWith(color: c.bad, fontWeight: FontWeight.w700)),
+          onTap: () => _fuelSheet(context),
+        ),
+        if (s.refuelLitres > 0)
+          RowTile(
+            icon: Icons.local_gas_station_outlined,
+            tone: Tone.blue,
+            title: context.s('rowRefuel'),
+            subtitle: '${s.refuelLitres} l × ${eur(t.plFuelEur!, lang, digits: 3)}',
+            trailing: Text(eurSigned(t.refuelSaving, lang),
+                style: context.tt.titleMedium!.copyWith(color: t.refuelSaving >= 0 ? c.good : c.bad, fontWeight: FontWeight.w700)),
+            onTap: () => _fuelSheet(context),
+          ),
+        RowTile(
+          title: context.s('rowTotal'),
+          trailing: Text(eurSigned(t.net, lang), style: context.tt.titleLarge!.copyWith(color: t.net >= 0 ? c.good : c.bad)),
+          last: true,
+        ),
+      ]),
       Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
         child: Text(
           [
             context.s('tripSpend', {'v': '${zl(pln, lang)}${plEur == null ? '' : ' ≈ ${eur(plEur, lang)}'}'}),
             if (unknown > 0) context.s('planUnknown', {'n': unknown}),
-            if (t.breakEven != null && t.net < 0) context.s('breakEven', {'v': eur(t.breakEven!, lang, digits: 0)}),
           ].join(' · '),
-          style: context.tt.bodyMedium,
+          style: context.tt.bodySmall,
         ),
       ),
     ]);
@@ -891,64 +1004,12 @@ Future<void> _fuelSheet(BuildContext context) => showSheet(context, (ctx) {
       );
     });
 
-/// When to leave: shops' hours that day in both clocks, and the latest sensible departure.
-class _Timing extends StatelessWidget {
-  const _Timing({required this.day, required this.stops});
-  final DateTime day;
-  final List<_Stop> stops;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppScope.of(context);
-    final c = context.c;
-    final p = plNow();
-    final isToday = day.year == p.year && day.month == p.month && day.day == p.day;
-    final km = s.origin.km[s.destId] ?? 0;
-    final driveMin = (km / _avgKmh * 60).round();
-    final f = s.storeFeed;
-    int? opens, closes;
-    for (final x in stops) {
-      if (x.store == null || f == null) continue;
-      final h = dayHours(f.hoursOf(x.store!).hours, day);
-      if (h.kind != HoursKind.open) continue;
-      opens = opens == null ? h.opens : (h.opens! > opens ? h.opens : opens); // all open
-      closes = closes == null ? h.closes : (h.closes! < closes ? h.closes : closes); // first to close
-    }
-    String both(int m) => '${fmtMin(m)} (LT ${fmtMin(m + 60)})';
-    // Latest departure, Lithuanian time: arrive, shop everywhere, before the first shop closes.
-    final latest = closes == null ? null : closes + 60 - driveMin - _minutesPerShop * stops.length;
-    final now = DateTime.now();
-    final late = isToday && latest != null && now.hour * 60 + now.minute > latest;
-
-    Widget line(IconData icon, String text, {Color? color}) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(icon, size: 24, color: color ?? c.text2),
-            const SizedBox(width: 12),
-            Expanded(child: Text(text, style: context.tt.bodyLarge!.copyWith(color: color))),
-          ]),
-        );
-
-    return Panel(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        line(Icons.route_rounded, context.s('planDrive', {'km': km, 'h': fmtNum(driveMin / 60, context.lang)})),
-        if (opens != null && closes != null) line(Icons.storefront_rounded, context.s('planHours', {'from': both(opens), 'to': both(closes)})),
-        if (latest != null && latest > 0)
-          line(late ? Icons.warning_amber_rounded : Icons.schedule_rounded, context.s(late ? 'planLate' : 'planLeaveBy', {'t': fmtMin(latest)}),
-              color: late ? c.bad : null),
-        line(Icons.access_time_rounded, context.s('planTz')),
-      ]),
-    );
-  }
-}
-
 class _StopCard extends StatelessWidget {
-  const _StopCard({required this.n, required this.stop, required this.day, required this.canRemove});
+  const _StopCard({required this.n, required this.stop, required this.day, required this.canRemove, this.last = false});
   final int n;
   final _Stop stop;
   final DateTime day;
-  final bool canRemove;
+  final bool canRemove, last;
 
   @override
   Widget build(BuildContext context) {
@@ -970,67 +1031,90 @@ class _StopCard extends StatelessWidget {
       }
     }
 
+    Widget mini(String label, IconData icon, VoidCallback onTap) => Expanded(
+          child: Press(
+            onTap: onTap,
+            scale: .96,
+            child: Container(
+              height: 34,
+              decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(10), border: Border.all(color: c.line)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(icon, size: 15, color: c.text2),
+                const SizedBox(width: 6),
+                Flexible(child: Text(label, overflow: TextOverflow.ellipsis, style: context.tt.labelMedium!.copyWith(color: c.text))),
+              ]),
+            ),
+          ),
+        );
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Panel(
-        padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(border: last ? null : Border(bottom: BorderSide(color: c.line))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            if (fuel)
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(color: Brand.green, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.local_gas_station_rounded, color: Colors.white),
-              )
-            else if (chain != null)
-              ChainDot(chain, label: '$n')
-            else
-              const SizedBox(width: 40),
-            const SizedBox(width: 12),
+            Container(
+              width: 24,
+              height: 24,
+              margin: const EdgeInsets.only(top: 1),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: fuel ? c.blueSoft : c.raised, borderRadius: BorderRadius.circular(8), border: Border.all(color: c.line)),
+              child: fuel
+                  ? Icon(Icons.local_gas_station_rounded, size: 14, color: c.blue)
+                  : Text('$n', style: context.tt.labelSmall!.copyWith(color: c.text, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: context.tt.titleLarge),
+                Row(children: [
+                  if (chain != null && !fuel) ...[Dot(chain.color), const SizedBox(width: 7)],
+                  Flexible(child: Text(title, style: context.tt.titleMedium)),
+                ]),
                 if (st == null)
-                  Text(context.s('planNoShop', {'town': s.dest.name}), style: context.tt.bodyMedium!.copyWith(color: c.warn))
-                else ...[
-                  Text(st.address ?? st.name ?? context.s('planNoAddress'), style: context.tt.bodyMedium),
-                  const SizedBox(height: 6),
-                  _HoursPill(store: st, day: day),
-                ],
-                const SizedBox(height: 8),
-                if (fuel)
-                  Text(context.s('planFuelLitres', {'l': s.refuelLitres}), style: context.tt.bodyMedium)
+                  Text(context.s('planNoShop', {'town': s.dest.name}), style: context.tt.bodySmall!.copyWith(color: c.warn))
                 else
-                  InkWell(
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(st.address ?? st.name ?? context.s('planNoAddress'), style: context.tt.bodySmall!.copyWith(color: c.text2, fontSize: 12.5)),
+                  ),
+                if (st != null) Padding(padding: const EdgeInsets.only(top: 6), child: _HoursPill(store: st, day: day)),
+                const SizedBox(height: 6),
+                if (fuel)
+                  Text(context.s('planFuelLitres', {'l': s.refuelLitres}), style: context.tt.bodySmall!.copyWith(color: c.text2))
+                else
+                  GestureDetector(
                     onTap: () => shellTab.value = Tabs.list,
                     child: Text(
                       stop.items.isEmpty
                           ? context.s('tripStopNoItems')
                           : context.s('tripStopItems', {'items': context.items(stop.items.length), 'v': '${unknown > 0 ? '≥ ' : ''}${zl(sub, lang)}'}),
-                      style: context.tt.titleMedium!.copyWith(color: stop.items.isEmpty ? c.text3 : null),
+                      style: context.tt.bodySmall!.copyWith(color: stop.items.isEmpty ? c.text3 : c.text, fontWeight: FontWeight.w600),
                     ),
                   ),
               ]),
             ),
             if (canRemove)
-              IconButton(
-                tooltip: context.s('tripRemoveStop'),
-                icon: Icon(Icons.close_rounded, color: c.text3),
-                onPressed: () => fuel ? s.update((x) => x.refuelLitres = 0) : s.toggleTripChain(stop.chain),
+              GestureDetector(
+                onTap: () => fuel ? s.update((x) => x.refuelLitres = 0) : s.toggleTripChain(stop.chain),
+                child: Padding(padding: const EdgeInsets.only(left: 8), child: Icon(Icons.close_rounded, size: 18, color: c.text3)),
               ),
           ]),
-          if (st != null)
-            Wrap(spacing: 0, children: [
-              TextButton.icon(onPressed: () => _open(_gmaps(st)), icon: const Icon(Icons.map_rounded, size: 20), label: const Text('Google Maps')),
-              TextButton.icon(onPressed: () => _open(_waze(st)), icon: const Icon(Icons.navigation_rounded, size: 20), label: const Text('Waze')),
-              if ((s.storeFeed?.inTown(s.destId, stop.chain).length ?? 0) > 1)
-                TextButton.icon(
-                  onPressed: () => _pickStore(context, stop.chain),
-                  icon: const Icon(Icons.swap_horiz_rounded, size: 20),
-                  label: Text(context.s('planOtherShop')),
-                ),
-            ]),
+          if (st != null) ...[
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(left: 34),
+              child: Row(children: [
+                mini('Waze', Icons.navigation_outlined, () => _open(_waze(st))),
+                const SizedBox(width: 8),
+                mini('Maps', Icons.map_outlined, () => _open(_gmaps(st))),
+                if ((s.storeFeed?.inTown(s.destId, stop.chain).length ?? 0) > 1) ...[
+                  const SizedBox(width: 8),
+                  mini(context.s('planOtherShopShort'), Icons.swap_horiz_rounded, () => _pickStore(context, stop.chain)),
+                ],
+              ]),
+            ),
+          ],
         ]),
       ),
     );

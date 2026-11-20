@@ -20,37 +20,10 @@ class MoreScreen extends StatelessWidget {
     final c = context.c;
     final lang = context.lang;
 
-    Widget block(String title, Widget child) => Padding(
-          padding: const EdgeInsets.only(bottom: 22),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Padding(padding: const EdgeInsets.only(left: 4, bottom: 10), child: Text(title, style: context.tt.titleMedium)),
-            child,
-          ]),
-        );
-
-    Widget link(IconData icon, String title, VoidCallback onTap, {String? sub, Color? color}) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Panel(
-            onTap: onTap,
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [
-              IconTile(icon, size: 44, color: color),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: context.tt.titleMedium!.copyWith(color: color)),
-                  if (sub != null) Text(sub, style: context.tt.bodyMedium),
-                ]),
-              ),
-              Icon(Icons.chevron_right_rounded, color: c.text3),
-            ]),
-          ),
-        );
-
     void info(String title, List<String> lines) => showSheet(
           context,
           (ctx) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 0, 22, 28),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: ctx.tt.headlineSmall),
               const SizedBox(height: 14),
@@ -58,7 +31,7 @@ class MoreScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Padding(padding: EdgeInsets.only(top: 8), child: Icon(Icons.circle, size: 7, color: Brand.yellow)),
+                    Padding(padding: const EdgeInsets.only(top: 7), child: Dot(ctx.c.accent, size: 6)),
                     const SizedBox(width: 12),
                     Expanded(child: Text(l, style: ctx.tt.bodyLarge)),
                   ]),
@@ -67,74 +40,125 @@ class MoreScreen extends StatelessWidget {
           ),
         );
 
+    Widget segRow(String title, Widget seg, {String? sub, double width = 170, bool last = false}) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(border: last ? null : Border(bottom: BorderSide(color: c.line))),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(title, style: context.tt.titleMedium),
+                  if (sub != null) Text(sub, style: context.tt.bodySmall!.copyWith(color: c.text2)),
+                ]),
+              ),
+              SizedBox(width: width, child: seg),
+            ]),
+          ),
+        );
+
+    void push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+
     return Scaffold(
       appBar: AppBar(title: Text(context.s('moreTitle'))),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
         children: [
-          block(context.s('setLang'),
-              Segmented<Lang>(value: s.lang, options: const [(Lang.lt, 'Lietuvių'), (Lang.en, 'English')], onChanged: (v) => s.update((x) => x.lang = v))),
-          block(
-            context.s('setText'),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Segmented<double>(
-                value: s.textScale,
-                options: [(1.0, context.s('textNormal')), (1.15, context.s('textLarge')), (1.3, context.s('textXL'))],
-                onChanged: (v) => s.update((x) => x.textScale = v),
-              ),
-              Padding(padding: const EdgeInsets.fromLTRB(4, 10, 4, 0), child: Text(context.s('setPreview'), style: context.tt.bodyLarge)),
-            ]),
-          ),
-          block(
-            context.s('setTheme'),
-            Segmented<ThemeMode>(
-              value: s.themeMode,
-              options: [(ThemeMode.dark, context.s('themeDark')), (ThemeMode.light, context.s('themeLight')), (ThemeMode.system, context.s('themeSystem'))],
-              onChanged: (v) => s.update((x) => x.themeMode = v),
+          SectionTitle(context.s('setLook'), top: 16),
+          RowGroup(children: [
+            segRow(context.s('setLang'), Segmented<Lang>(value: s.lang, options: const [(Lang.lt, 'LT'), (Lang.en, 'EN')], onChanged: (v) => s.update((x) => x.lang = v)), width: 120),
+            segRow(
+              context.s('setText'),
+              Segmented<double>(value: s.textScale, options: const [(1.0, '1.0×'), (1.15, '1.15×'), (1.3, '1.3×')], onChanged: (v) => s.update((x) => x.textScale = v)),
             ),
-          ),
-          block(
-            context.s('setFee'),
-            Segmented<double>(
-              value: s.cardFeePct,
-              options: [for (final f in [0.0, 1.0, 2.0, 3.0]) (f, '${fmtNum(f, lang, digits: 0)} %')],
-              onChanged: (v) => s.update((x) => x.cardFeePct = v),
-            ),
-          ),
-          block(context.s('moreOpenPrices'), const OpenPricesAccount()),
-          Padding(padding: const EdgeInsets.only(left: 4, bottom: 10), child: Text(context.s('moreTools'), style: context.tt.titleMedium)),
-          link(Icons.savings_rounded, context.s('histTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
-              sub: s.trips.isEmpty ? null : context.s('histHome', {'v': eurSigned(s.yearTotals(DateTime.now().year).saved, lang)})),
-          link(Icons.notifications_active_rounded, context.s('watchTitle'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WatchScreen())),
-              sub: context.s('watchHomeSub')),
-          link(Icons.currency_exchange_rounded, context.s('actionConvert'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConvertScreen())),
-              sub: s.rate == null ? null : context.s('convRate', {'r': fmtNum(s.rate!.mid, lang, digits: 4), 'd': s.rate!.date})),
-          link(Icons.fact_check_rounded, context.s('planChecklist'), () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ChecklistScreen()))),
-          const SizedBox(height: 12),
-          link(Icons.dataset_rounded, context.s('aboutData'),
-              () => info(context.s('aboutData'), [context.s('dataNbp'), context.s('dataOff'), context.s('dataCalendar'), context.s('dataDistance'), context.s('dataPrices')])),
-          link(Icons.lock_rounded, context.s('privacy'), () => info(context.s('privacy'), [context.s('privacyText')])),
-          link(Icons.info_rounded, context.s('aboutApp'), () => info(context.s('aboutApp'), [context.s('aboutAppText'), context.s('version', {'v': '0.1.0'})])),
-          const SizedBox(height: 12),
-          link(Icons.delete_forever_rounded, context.s('resetAll'), color: c.bad, () async {
-            final ok = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: c.surface,
-                title: Text(ctx.s('resetQ'), style: ctx.tt.headlineSmall),
-                content: Text(ctx.s('resetSub'), style: ctx.tt.bodyLarge),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.s('cancel'), style: ctx.tt.titleMedium)),
-                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.s('delete'), style: ctx.tt.titleMedium!.copyWith(color: c.bad))),
-                ],
+            segRow(
+              context.s('setTheme'),
+              Segmented<ThemeMode>(
+                value: s.themeMode,
+                options: [(ThemeMode.dark, context.s('themeDark')), (ThemeMode.light, context.s('themeLight')), (ThemeMode.system, context.s('themeAuto'))],
+                onChanged: (v) => s.update((x) => x.themeMode = v),
               ),
-            );
-            if (ok == true) await s.resetAll();
-          }),
-          const SizedBox(height: 18),
+              width: 190,
+            ),
+            segRow(
+              context.s('setFee'),
+              Stepper2(
+                value: s.cardFeePct,
+                min: 0,
+                max: 3,
+                step: .5,
+                format: (v) => '${fmtNum(v, lang)} %',
+                onChanged: (v) => s.update((x) => x.cardFeePct = v),
+              ),
+              sub: context.s('setFeeSub'),
+              width: 150,
+              last: true,
+            ),
+          ]),
+          SectionTitle(context.s('moreTools')),
+          RowGroup(children: [
+            RowTile(
+              icon: Icons.savings_outlined,
+              tone: Tone.good,
+              title: context.s('histTitle'),
+              subtitle: s.trips.isEmpty ? context.s('histNone') : context.s('histHome', {'v': eurSigned(s.yearTotals(DateTime.now().year).saved, lang)}),
+              onTap: () => push(const HistoryScreen()),
+            ),
+            RowTile(icon: Icons.notifications_none_rounded, tone: Tone.accent, title: context.s('watchTitle'), subtitle: context.s('watchHomeSub'), onTap: () => push(const WatchScreen())),
+            RowTile(
+              icon: Icons.currency_exchange_rounded,
+              tone: Tone.blue,
+              title: context.s('actionConvert'),
+              subtitle: s.rate == null ? null : context.s('convRate', {'r': fmtNum(s.rate!.mid, lang, digits: 4), 'd': s.rate!.date}),
+              onTap: () => push(const ConvertScreen()),
+            ),
+            RowTile(icon: Icons.fact_check_outlined, title: context.s('planChecklist'), subtitle: context.s('checklistSub'), onTap: () => push(const ChecklistScreen()), last: true),
+          ]),
+          SectionTitle(context.s('moreOpenPrices')),
+          const OpenPricesAccount(),
+          SectionTitle(context.s('setHonesty')),
+          RowGroup(children: [
+            RowTile(
+              icon: Icons.dataset_outlined,
+              title: context.s('aboutData'),
+              subtitle: context.s('aboutDataSub'),
+              onTap: () => info(context.s('aboutData'), [context.s('dataNbp'), context.s('dataOff'), context.s('dataCalendar'), context.s('dataDistance'), context.s('dataPrices')]),
+            ),
+            RowTile(icon: Icons.lock_outline_rounded, title: context.s('privacy'), onTap: () => info(context.s('privacy'), [context.s('privacyText')])),
+            RowTile(
+              icon: Icons.info_outline_rounded,
+              title: context.s('aboutApp'),
+              subtitle: context.s('freeForever'),
+              onTap: () => info(context.s('aboutApp'), [context.s('aboutAppText'), context.s('version', {'v': '0.2.0'})]),
+              last: true,
+            ),
+          ]),
+          const SizedBox(height: 16),
+          BigButton(
+            label: context.s('resetAll'),
+            kind: BtnKind.danger,
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text(ctx.s('resetQ'), style: ctx.tt.headlineSmall),
+                  content: Text(ctx.s('resetSub'), style: ctx.tt.bodyLarge),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.s('cancel'))),
+                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.s('delete'), style: TextStyle(color: c.bad))),
+                  ],
+                ),
+              );
+              if (ok == true) {
+                await s.resetAll();
+                if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
+              }
+            },
+          ),
+          const SizedBox(height: 22),
           const Center(child: FlagRibbon(width: 56, height: 4)),
           const SizedBox(height: 10),
-          Center(child: Text(context.s('tagline'), style: context.tt.bodyMedium)),
+          Center(child: Text(context.s('tagline'), style: context.tt.bodySmall)),
         ],
       ),
     );

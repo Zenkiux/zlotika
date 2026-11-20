@@ -23,25 +23,24 @@ class CardsScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
           PageHeader(context.s('cardsTitle'), subtitle: context.s('cardsSub'), trailing: const SettingsButton()),
           if (s.wallet.isEmpty)
             Panel(
               child: Row(children: [
-                const IconTile(Icons.credit_card_rounded),
+                const IconTile(Icons.credit_card_rounded, tone: Tone.accent),
                 const SizedBox(width: 12),
                 Expanded(child: Text(context.s('cardsEmpty'), style: context.tt.bodyMedium)),
               ]),
             ),
-          for (final card in s.wallet) Padding(padding: const EdgeInsets.only(bottom: 10), child: _CardTile(card)),
-          const SizedBox(height: 6),
+          for (final card in s.wallet) Padding(padding: const EdgeInsets.only(bottom: 12), child: _CardTile(card)),
+          const SizedBox(height: 8),
           BigButton(label: context.s('cardsAdd'), icon: Icons.add_rounded, onPressed: () => addCardFlow(context)),
           if (missing.isNotEmpty) ...[
             SectionTitle(context.s('cardsSuggested')),
             RowGroup(children: [
-              for (var i = 0; i < missing.length; i++)
-                _SuggestRow(type: missing[i], last: i == missing.length - 1),
+              for (var i = 0; i < missing.length; i++) _SuggestRow(type: missing[i], last: i == missing.length - 1),
             ]),
           ],
           const SizedBox(height: 14),
@@ -103,26 +102,47 @@ class _CardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = card.t;
-    return Material(
-      color: t.color,
-      borderRadius: BorderRadius.circular(18),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => showCard(context, card),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(18, 16, 12, 16),
-          child: Row(children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(t.name, style: context.tt.bodySmall!.copyWith(color: t.ink.withValues(alpha: .8))),
-                Text(card.title, style: context.tt.titleLarge!.copyWith(color: t.ink)),
-                const SizedBox(height: 6),
-                Text(_spaced(card.code), style: context.tt.bodyMedium!.copyWith(color: t.ink.withValues(alpha: .85), fontFeatures: const [FontFeature.tabularFigures()])),
-              ]),
-            ),
-            Icon(Icons.qr_code_2_rounded, color: t.ink, size: 30),
-          ]),
+    const white = Colors.white;
+    return Press(
+      onTap: () => showCard(context, card),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 112),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: t.gradient),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0x1FFFFFFF)),
+          boxShadow: const [BoxShadow(color: Color(0x38000000), blurRadius: 24, offset: Offset(0, 10))],
         ),
+        child: Stack(children: [
+          Positioned(
+            right: -24,
+            top: -24,
+            child: Container(width: 110, height: 110, decoration: const BoxDecoration(color: Color(0x1AFFFFFF), shape: BoxShape.circle)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                Expanded(child: Text(card.title, style: context.tt.titleLarge!.copyWith(color: white, fontSize: 18))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: const Color(0x38000000), borderRadius: BorderRadius.circular(999)),
+                  child: Text(t.dynamicCode ? context.s('cardsRotating') : card.format.name.toUpperCase(),
+                      style: context.tt.labelSmall!.copyWith(color: const Color(0xEBFFFFFF), fontSize: 11)),
+                ),
+              ]),
+              const SizedBox(height: 18),
+              Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Expanded(
+                  child: Text(_spaced(card.code),
+                      style: const TextStyle(fontFamily: 'Menlo', fontSize: 13, letterSpacing: 1, color: Color(0xE0FFFFFF), fontFeatures: [FontFeature.tabularFigures()])),
+                ),
+                Text('${context.s('cardsShowHint')} →', style: context.tt.labelMedium!.copyWith(color: const Color(0xE6FFFFFF), fontSize: 12)),
+              ]),
+            ]),
+          ),
+        ]),
       ),
     );
   }
@@ -167,56 +187,83 @@ class _CardViewState extends State<_CardView> {
     final card = widget.card;
     final t = card.t;
     final qr = card.format == CodeFormat.qr;
+    Future<void> remove() async {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(ctx.s('cardsDeleteQ'), style: ctx.tt.headlineSmall),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.s('cancel'))),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.s('delete'), style: TextStyle(color: ctx.c.bad))),
+          ],
+        ),
+      );
+      if (ok == true && context.mounted) {
+        AppScope.read(context).removeCard(card.id);
+        Navigator.pop(context);
+      }
+    }
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: t.color,
-        foregroundColor: t.ink,
-        title: Text(card.title, style: context.tt.titleLarge!.copyWith(color: t.ink)),
-        actions: [
-          IconButton(
-            tooltip: context.s('delete'),
-            icon: const Icon(Icons.delete_outline_rounded),
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: Text(ctx.s('cardsDeleteQ'), style: ctx.tt.headlineSmall),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(ctx.s('cancel'))),
-                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(ctx.s('delete'), style: TextStyle(color: ctx.c.bad))),
-                  ],
-                ),
-              );
-              if (ok == true && context.mounted) {
-                AppScope.read(context).removeCard(card.id);
-                Navigator.pop(context);
-              }
-            },
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFF0B0C0F),
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              BarcodeWidget(
-                barcode: _barcodeFor(card.format),
-                data: card.code,
-                width: qr ? 260 : double.infinity,
-                height: qr ? 260 : 140,
-                drawText: false,
-                color: Colors.black,
-                backgroundColor: Colors.white,
-                errorBuilder: (ctx, err) => Text(ctx.s('cardsBadCode'), style: const TextStyle(color: Colors.black)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                decoration: BoxDecoration(color: const Color(0x29F5C43D), borderRadius: BorderRadius.circular(999)),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.wb_sunny_outlined, size: 14, color: Brand.yellow),
+                  const SizedBox(width: 6),
+                  Text(context.s('cardsBright'), style: context.tt.labelMedium!.copyWith(color: Brand.yellow, fontSize: 12)),
+                ]),
               ),
-              const SizedBox(height: 18),
-              SelectableText(_spaced(card.code), style: const TextStyle(fontFamily: 'Inter', fontSize: 24, fontWeight: FontWeight.w600, color: Colors.black, letterSpacing: 1)),
-              const SizedBox(height: 10),
-              Text(context.s('cardsShowCashier'), style: const TextStyle(fontFamily: 'Inter', fontSize: 15, color: Color(0xFF555555)), textAlign: TextAlign.center),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(color: Color(0x1FFFFFFF), shape: BoxShape.circle),
+                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                ),
+              ),
             ]),
-          ),
+            const SizedBox(height: 26),
+            Text(card.title, textAlign: TextAlign.center, style: context.tt.headlineSmall!.copyWith(color: Colors.white, fontSize: 24)),
+            const SizedBox(height: 4),
+            Text(context.s('cardsShowCashier'), textAlign: TextAlign.center, style: context.tt.bodyMedium!.copyWith(color: const Color(0xFF94A3B8))),
+            const SizedBox(height: 22),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 28, 20, 22),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: const [BoxShadow(color: Color(0x73000000), blurRadius: 50, offset: Offset(0, 20))],
+              ),
+              child: Column(children: [
+                BarcodeWidget(
+                  barcode: _barcodeFor(card.format),
+                  data: card.code,
+                  width: qr ? 240 : double.infinity,
+                  height: qr ? 240 : 130,
+                  drawText: false,
+                  color: Colors.black,
+                  backgroundColor: Colors.white,
+                  errorBuilder: (ctx, err) => Text(ctx.s('cardsBadCode'), style: const TextStyle(color: Colors.black)),
+                ),
+                const SizedBox(height: 14),
+                SelectableText(_spaced(card.code),
+                    style: const TextStyle(fontFamily: 'Menlo', fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF0B0C0F), letterSpacing: 2.4)),
+              ]),
+            ),
+            const Spacer(),
+            Text(t.program, textAlign: TextAlign.center, style: context.tt.bodySmall!.copyWith(color: const Color(0xFF687082))),
+            const SizedBox(height: 12),
+            BigButton(label: context.s('cardsRemove'), kind: BtnKind.danger, onPressed: remove),
+          ]),
         ),
       ),
     );
