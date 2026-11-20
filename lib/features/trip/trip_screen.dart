@@ -25,6 +25,7 @@ import '../../services/deals.dart';
 import '../../services/match.dart';
 import '../plan/checklist_screen.dart';
 import '../map/map_screen.dart' show osmTiles;
+import '../calc/calc_screen.dart' show openCalc;
 
 /// Trip economics. Every number shown is derived here from the trip, the list and the NBP rate.
 class TripCalc {
@@ -548,6 +549,15 @@ class _Overview extends StatelessWidget {
           const _ConvertBar(),
           SectionTitle(context.s('quickAccess')),
           RowGroup(children: [
+            RowTile(
+              icon: Icons.calculate_outlined,
+              tone: Tone.accent,
+              title: context.s('calcTitle'),
+              subtitle: s.calc.isEmpty
+                  ? context.s('calcRowSub')
+                  : '${zl(s.calcTotal, lang)}${s.toEur(s.calcTotal) == null ? '' : ' ≈ ${eur(s.toEur(s.calcTotal)!, lang)}'} · ${context.s('calcItems', {'n': s.calcCount})}',
+              onTap: () => openCalc(context),
+            ),
             RowTile(
               icon: Icons.format_list_bulleted_rounded,
               tone: Tone.accent,

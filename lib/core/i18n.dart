@@ -387,6 +387,14 @@ const _lt = <String, String>{
   'today2': 'šiandien',
   'daysAgo': 'prieš {n} d.',
   'heroFuelOnly': 'Kol kas tik kuras: kelias ir pylimas Lenkijoje. Pridėkite prekių su kainomis.',
+  'calcTitle': 'Krepšelio skaičiuoklė',
+  'calcRowSub': 'Parduotuvėje: įveskite kainą zlotais ir +, matysite sumą €',
+  'calcItems': '{n} vnt.',
+  'calcTotal': 'Krepšelyje · {n} vnt.',
+  'calcEmpty': 'Įveskite lentynos kainą zlotais ir spauskite „+“. Suma zlotais ir eurais bus viršuje.',
+  'calcClear': 'Išvalyti',
+  'calcClearQ': 'Išvalyti krepšelį?',
+  'calcSwipe': 'Klaidą ištrinsite perbraukę eilutę į kairę.',
 };
 
 const _en = <String, String>{
@@ -770,6 +778,14 @@ const _en = <String, String>{
   'today2': 'today',
   'daysAgo': '{n} d ago',
   'heroFuelOnly': 'Fuel only so far: the drive and filling up in Poland. Add items with prices.',
+  'calcTitle': 'Basket calculator',
+  'calcRowSub': 'In the shop: type the price in złoty and +, see the total in €',
+  'calcItems': '{n} pcs',
+  'calcTotal': 'In the basket · {n} pcs',
+  'calcEmpty': 'Type the shelf price in złoty and tap “+”. The total in złoty and euro stays at the top.',
+  'calcClear': 'Clear',
+  'calcClearQ': 'Clear the basket?',
+  'calcSwipe': 'Swipe a line left to delete a mistake.',
 };
 
 /// Translation without a BuildContext (notifications, background work).

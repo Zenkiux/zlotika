@@ -12,6 +12,7 @@ import '../../widgets/ui.dart';
 import '../scan/scan_screen.dart';
 import 'add_item_screen.dart';
 import 'item_sheet.dart';
+import '../calc/calc_screen.dart' show openCalc;
 import 'deal_pick.dart' show dealName;
 
 /// The shopping list, grouped by the trip's shops. Prices come only from those shops.
@@ -54,6 +55,16 @@ class ListScreen extends StatelessWidget {
                     Expanded(child: Text(context.s('addPlaceholder'), overflow: TextOverflow.ellipsis, style: context.tt.bodyLarge!.copyWith(color: c.text3, fontSize: 14.5))),
                   ]),
                 ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Press(
+              onTap: () => openCalc(context),
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(14), border: Border.all(color: c.accentLine)),
+                child: Icon(Icons.calculate_outlined, size: 22, color: c.accentText),
               ),
             ),
             const SizedBox(width: 8),

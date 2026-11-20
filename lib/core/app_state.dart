@@ -136,6 +136,11 @@ class AppState extends ChangeNotifier {
   // Route: the shopper's own stop order, stops already visited, and the navigation app.
   final List<String> routeOrder = []; // chain ids (and 'fuel') in driving order
   final Set<String> routeDone = {};
+
+  // In-shop calculator: prices (zł) added while shopping, so the cart total is known live.
+  final List<({double price, int qty})> calc = [];
+  double get calcTotal => calc.fold(0.0, (a, e) => a + e.price * e.qty);
+  int get calcCount => calc.fold(0, (a, e) => a + e.qty);
   String navApp = 'gmaps'; // gmaps | waze | apple
 
   // Wallet: loyalty cards, and fuel prices the shopper saw at stations.
@@ -660,6 +665,9 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(((j['routeDone'] as List?) ?? []).cast<String>());
       navApp = j['navApp'] as String? ?? 'gmaps';
+      calc
+        ..clear()
+        ..addAll(((j['calc'] as List?) ?? []).map((e) => (price: ((e as Map)['p'] as num).toDouble(), qty: (e['q'] as num?)?.toInt() ?? 1)));
       ltShop = j['ltShop'] as String? ?? 'maxima';
       items
         ..clear()
@@ -715,6 +723,7 @@ class AppState extends ChangeNotifier {
           'wallet': wallet.map((c) => c.toJson()).toList(), 'seenFuel': seenFuel.map((k, v) => MapEntry(k, v.toJson())),
           'mapLayers': mapLayers.toList(), 'mapChains': mapChains.toList(), 'mapOpenOnly': mapOpenOnly,
           'routeOrder': routeOrder, 'routeDone': routeDone.toList(), 'navApp': navApp,
+          'calc': [for (final e in calc) {'p': e.price, 'q': e.qty}],
           'watch': watch.map((w) => w.toJson()).toList(), 'alerted': alerted.toList(), 'alertsOn': alertsOn,
           'trips': trips.map((t) => t.toJson()).toList(),
           'priceMemory': priceMemory.map((k, v) => MapEntry(k, {'pl': v.pl, 'chain': v.chain, 'date': v.date})),
@@ -770,6 +779,7 @@ class AppState extends ChangeNotifier {
     routeOrder.clear();
     routeDone.clear();
     navApp = 'gmaps';
+    calc.clear();
     tripDate = null;
     ltShop = 'maxima';
     priceFixes.clear();
