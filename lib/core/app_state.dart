@@ -15,6 +15,7 @@ import '../services/nbp.dart';
 import '../services/stores.dart';
 import '../services/prices.dart';
 import '../services/wallet.dart';
+import '../services/updates.dart';
 import 'i18n.dart';
 
 enum FuelType { diesel, petrol, lpg }
@@ -108,6 +109,28 @@ class AppState extends ChangeNotifier {
   double textScale = 1.0; // 1.0 / 1.15 / 1.3
   ThemeMode themeMode = ThemeMode.dark;
   bool onboarded = false;
+
+  // App updates (Android): the newest published APK, if newer than this build.
+  AppUpdate? appUpdate;
+  String appVersion = '';
+  DateTime? updateCheckedAt;
+  bool updateChecking = false;
+
+  Future<void> checkUpdate() async {
+    if (updateChecking) return;
+    updateChecking = true;
+    notifyListeners();
+    try {
+      final me = await AppUpdate.current();
+      appVersion = '${me.version} (${me.build})';
+      appUpdate = await AppUpdate.check();
+      updateCheckedAt = DateTime.now();
+    } catch (_) {
+    } finally {
+      updateChecking = false;
+      notifyListeners();
+    }
+  }
 
   // Wallet: loyalty cards, and fuel prices the shopper saw at stations.
   final List<LoyaltyCard> wallet = [];

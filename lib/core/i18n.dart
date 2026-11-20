@@ -353,6 +353,17 @@ const _lt = <String, String>{
   'dealsBannerSub': 'Šios savaitės kainos jūsų parduotuvėse',
   'dealInList': 'Sąraše',
   'cardsRowAddCode': 'Turite {c} – pridėkite brūkšninį kodą',
+  'updTitle': 'Programėlės atnaujinimai',
+  'updVersion': 'Versija {v}',
+  'updChecking': 'Tikriname…',
+  'updLatest': 'Naujausia versija',
+  'updCheck': 'Tikrinti',
+  'updAvailable': 'Nauja versija {v}',
+  'updSub': 'Paspauskite „Atnaujinti“ ir patvirtinkite diegimą. Duomenys išliks.',
+  'updButton': 'Atnaujinti',
+  'updFailed': 'Nepavyko atsisiųsti. Bandykite per naršyklę.',
+  'updDownloading': 'Atsisiunčiama… {p} %',
+  'updBrowser': 'Naršyklėje',
 };
 
 const _en = <String, String>{
@@ -702,6 +713,17 @@ const _en = <String, String>{
   'dealsBannerSub': 'This week’s prices in your shops',
   'dealInList': 'In list',
   'cardsRowAddCode': 'You have {c} – add its barcode',
+  'updTitle': 'App updates',
+  'updVersion': 'Version {v}',
+  'updChecking': 'Checking…',
+  'updLatest': 'You have the latest version',
+  'updCheck': 'Check',
+  'updAvailable': 'New version {v}',
+  'updSub': 'Tap Update and confirm the install. Your data stays.',
+  'updButton': 'Update',
+  'updFailed': 'Download failed. Try in the browser.',
+  'updDownloading': 'Downloading… {p} %',
+  'updBrowser': 'In browser',
 };
 
 /// Translation without a BuildContext (notifications, background work).

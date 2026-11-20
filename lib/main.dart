@@ -21,6 +21,7 @@ Future<void> main() async {
   state.refreshRate();
   state.loadStores();
   state.loadPrices();
+  state.checkUpdate();
   await Alerts.init(state);
   state.refreshFeed().then((_) => Alerts.check(state));
 }
@@ -85,6 +86,8 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       if (r == null || DateTime.now().difference(r.fetchedAt).inHours >= 3) s.refreshRate();
       final f = s.feed;
       if (f == null || DateTime.now().difference(f.generatedAt).inHours >= 6) s.refreshFeed().then((_) => Alerts.check(s));
+      final u = s.updateCheckedAt;
+      if (u == null || DateTime.now().difference(u).inHours >= 6) s.checkUpdate();
     }
   }
 

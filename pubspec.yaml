@@ -47,6 +47,8 @@ dependencies:
   geolocator: ^14.0.1
   barcode_widget: ^2.0.4
   screen_brightness: ^2.1.11
+  package_info_plus: ^10.2.2
+  ota_update: ^7.1.0
 
 dev_dependencies:
   flutter_test:

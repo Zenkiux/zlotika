@@ -13,7 +13,7 @@ import '../../data/geo.dart';
 import '../../main.dart' show shellTab, Tabs;
 import '../../services/fuel.dart';
 import '../../services/stores.dart';
-import '../more/more_screen.dart' show SettingsButton;
+import '../more/more_screen.dart' show SettingsButton, UpdateBanner;
 import '../../widgets/ui.dart';
 import '../history/history_screen.dart';
 import '../list/add_item_screen.dart';
@@ -533,6 +533,7 @@ class _Overview extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
         children: [
           PageHeader(context.s('tabTrip'), subtitle: '${_dayLabel(context, day)} · ${s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ')}', trailing: const SettingsButton()),
+          if (s.appUpdate != null) ...[const UpdateBanner(), const SizedBox(height: 12)],
           _Hero(day: day, stops: shopStops),
           if (lawClosed) ...[
             const SizedBox(height: 12),

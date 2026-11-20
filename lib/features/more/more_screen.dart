@@ -8,6 +8,7 @@ import '../convert/convert_screen.dart';
 import '../report/report_screen.dart' show OpenPricesAccount;
 import '../plan/checklist_screen.dart';
 import '../../widgets/ui.dart';
+import '../../services/updates.dart';
 import '../history/history_screen.dart';
 import '../watch/watch_screen.dart';
 
@@ -114,6 +115,19 @@ class MoreScreen extends StatelessWidget {
             ),
             RowTile(icon: Icons.fact_check_outlined, title: context.s('planChecklist'), subtitle: context.s('checklistSub'), onTap: () => push(const ChecklistScreen()), last: true),
           ]),
+          if (Theme.of(context).platform == TargetPlatform.android) ...[
+            SectionTitle(context.s('updTitle')),
+            if (s.appUpdate != null) const UpdateBanner() else
+            RowGroup(children: [
+              RowTile(
+                icon: Icons.system_update_outlined,
+                title: context.s('updVersion', {'v': s.appVersion}),
+                subtitle: s.updateChecking ? context.s('updChecking') : context.s('updLatest'),
+                trailing: TextButton(onPressed: s.updateChecking ? null : s.checkUpdate, child: Text(context.s('updCheck'))),
+                last: true,
+              ),
+            ]),
+          ],
           SectionTitle(context.s('moreOpenPrices')),
           const OpenPricesAccount(),
           SectionTitle(context.s('setHonesty')),
@@ -175,4 +189,88 @@ class SettingsButton extends StatelessWidget {
         tooltip: context.s('moreTitle'),
         onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MoreScreen())),
       );
+}
+
+/// "A new version is ready": one tap downloads it inside the app and opens Android's installer.
+class UpdateBanner extends StatefulWidget {
+  const UpdateBanner({super.key});
+
+  @override
+  State<UpdateBanner> createState() => _UpdateBannerState();
+}
+
+class _UpdateBannerState extends State<UpdateBanner> {
+  int? _percent; // null = not started
+  bool _failed = false;
+
+  Future<void> _go(AppUpdate u) async {
+    setState(() {
+      _percent = 0;
+      _failed = false;
+    });
+    await for (final e in u.install()) {
+      if (!mounted) return;
+      if (e.error) {
+        setState(() {
+          _failed = true;
+          _percent = null;
+        });
+        return;
+      }
+      setState(() => _percent = e.percent ?? _percent);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final u = s.appUpdate;
+    if (u == null) return const SizedBox.shrink();
+    final c = context.c;
+    final busy = _percent != null;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
+      decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(16), border: Border.all(color: c.accentLine)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Icon(Icons.system_update_rounded, color: c.accentText, size: 22),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(context.s('updAvailable', {'v': u.label}), style: context.tt.titleMedium),
+              Text(
+                _failed
+                    ? context.s('updFailed')
+                    : busy
+                        ? context.s('updDownloading', {'p': _percent!})
+                        : (u.notes ?? context.s('updSub')),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: context.tt.bodySmall!.copyWith(color: _failed ? c.bad : c.text2),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          if (!busy)
+            Press(
+              onTap: () => _failed ? u.openInBrowser() : _go(u),
+              child: Container(
+                height: 36,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: c.accent, borderRadius: BorderRadius.circular(10)),
+                child: Text(context.s(_failed ? 'updBrowser' : 'updButton'), style: context.tt.labelMedium!.copyWith(color: c.onAccent, fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ]),
+        if (busy) ...[
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(value: (_percent ?? 0) / 100, minHeight: 5, color: c.accent, backgroundColor: c.raised2),
+          ),
+        ],
+      ]),
+    );
+  }
 }
