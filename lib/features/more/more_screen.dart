@@ -202,6 +202,7 @@ class UpdateBanner extends StatefulWidget {
 class _UpdateBannerState extends State<UpdateBanner> {
   int? _percent; // null = not started
   bool _failed = false;
+  bool _handedOver = false; // Android's installer was opened; if they come back, they can tap again
 
   Future<void> _go(AppUpdate u) async {
     setState(() {
@@ -214,6 +215,13 @@ class _UpdateBannerState extends State<UpdateBanner> {
         setState(() {
           _failed = true;
           _percent = null;
+        });
+        return;
+      }
+      if (e.done) {
+        setState(() {
+          _percent = null;
+          _handedOver = true;
         });
         return;
       }
@@ -243,7 +251,9 @@ class _UpdateBannerState extends State<UpdateBanner> {
                     ? context.s('updFailed')
                     : busy
                         ? context.s('updDownloading', {'p': _percent!})
-                        : (u.notes ?? context.s('updSub')),
+                        : _handedOver
+                            ? context.s('updConfirm')
+                            : (u.notes ?? context.s('updSub')),
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
                 style: context.tt.bodySmall!.copyWith(color: _failed ? c.bad : c.text2),

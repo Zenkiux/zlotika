@@ -364,6 +364,7 @@ const _lt = <String, String>{
   'updFailed': 'Nepavyko atsisiųsti. Bandykite per naršyklę.',
   'updDownloading': 'Atsisiunčiama… {p} %',
   'updBrowser': 'Naršyklėje',
+  'updConfirm': 'Patvirtinkite diegimą Android lange. Jei jo nematėte – spauskite dar kartą.',
 };
 
 const _en = <String, String>{
@@ -724,6 +725,7 @@ const _en = <String, String>{
   'updFailed': 'Download failed. Try in the browser.',
   'updDownloading': 'Downloading… {p} %',
   'updBrowser': 'In browser',
+  'updConfirm': 'Confirm the install in Android’s window. Didn’t see it? Tap again.',
 };
 
 /// Translation without a BuildContext (notifications, background work).
