@@ -14,6 +14,7 @@ import '../data/dictionary.dart' show terms;
 import '../services/nbp.dart';
 import '../services/stores.dart';
 import '../services/prices.dart';
+import '../services/wallet.dart';
 import 'i18n.dart';
 
 enum FuelType { diesel, petrol, lpg }
@@ -108,6 +109,26 @@ class AppState extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.dark;
   bool onboarded = false;
 
+  // Wallet: loyalty cards, and fuel prices the shopper saw at stations.
+  final List<LoyaltyCard> wallet = [];
+  final Map<String, SeenFuel> seenFuel = {};
+  // Map layers the shopper chose to see.
+  final Set<String> mapLayers = {'shops', 'fuel', 'fuelLT', 'fuelPL'};
+  final Set<String> mapChains = {}; // empty = all chains
+  bool mapOpenOnly = false;
+
+  void addCard(LoyaltyCard c) => update((s) {
+        s.wallet.add(c);
+        final chain = c.t.chain;
+        if (chain != null) s.cards.add(chain);
+      });
+  void removeCard(String id) => update((s) {
+        final c = s.wallet.firstWhere((e) => e.id == id);
+        s.wallet.remove(c);
+        final chain = c.t.chain;
+        if (chain != null && !s.wallet.any((e) => e.t.chain == chain)) s.cards.remove(chain);
+      });
+
   // Trip
   String originId = 'kaunas';
   String destId = 'suwalki';
@@ -163,9 +184,9 @@ class AppState extends ChangeNotifier {
   String? tripDate; // yyyy-mm-dd, Polish calendar
 
   /// Where the shopper buys at home, so savings compare with *their* shop:
-  /// 'maxima' (Barbora prices), 'rimi', or 'cheapest' of the two.
+  /// 'maxima' (Barbora prices), 'rimi', 'lidl' / 'iki' / 'norfa' (this week's leaflet, else Maxima), or 'cheapest' of Maxima and Rimi.
   String ltShop = 'maxima';
-  static const ltShops = ['maxima', 'rimi', 'cheapest'];
+  static const ltShops = ['maxima', 'rimi', 'lidl', 'iki', 'norfa', 'cheapest'];
 
   bool inTrip(String? chain) => chain != null && tripChains.contains(chain);
 
@@ -287,6 +308,7 @@ class AppState extends ChangeNotifier {
     final maxima = _ref(priceFeed?.lt, i.plName), rimi = _ref(priceFeed?.ltRimi, i.plName);
     return switch (ltShop) {
       'rimi' => rimi ?? maxima,
+      'lidl' || 'iki' || 'norfa' => _ref(priceFeed?.ltPromo[ltShop], i.plName) ?? maxima ?? rimi,
       'cheapest' => (maxima == null || (rimi != null && rimi.unitMedian < maxima.unitMedian)) ? rimi : maxima,
       _ => maxima ?? rimi,
     };
@@ -423,16 +445,25 @@ class AppState extends ChangeNotifier {
   void chooseStore(String chain, String storeId) => update((s) => s.storeChoice['$destId/$chain'] = storeId);
 
   Future<void> loadStores() async {
+    // Whichever is newest wins: the snapshot shipped with the app, the cached feed, or the online one.
+    bool newer(StoreFeed f) => storeFeed?.generatedAt == null || (f.generatedAt != null && f.generatedAt!.isAfter(storeFeed!.generatedAt!));
     try {
+      storeFeed = StoreFeed.parse(await StoreFeed.bundled());
       final cached = _prefs.getString('$_key.stores');
-      storeFeed = StoreFeed.parse(cached ?? await StoreFeed.bundled());
+      if (cached != null) {
+        final c = StoreFeed.parse(cached);
+        if (newer(c)) storeFeed = c;
+      }
       notifyListeners();
     } catch (_) {}
     try {
       final body = await StoreFeed.fetch();
-      storeFeed = StoreFeed.parse(body);
-      await _prefs.setString('$_key.stores', body);
-      notifyListeners();
+      final f = StoreFeed.parse(body);
+      if (newer(f)) {
+        storeFeed = f;
+        await _prefs.setString('$_key.stores', body);
+        notifyListeners();
+      }
     } catch (_) {/* keep cached or bundled shops */}
   }
 
@@ -546,6 +577,22 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(((j['cards'] as List?) ?? []).cast<String>());
       tripDate = j['tripDate'] as String?;
+      wallet
+        ..clear()
+        ..addAll(((j['wallet'] as List?) ?? []).map((e) => LoyaltyCard.fromJson(e as Map<String, dynamic>)));
+      seenFuel
+        ..clear()
+        ..addAll(((j['seenFuel'] as Map?) ?? {}).map((k, v) => MapEntry(k as String, SeenFuel.fromJson(v as Map<String, dynamic>))));
+      if (j['mapLayers'] is List) {
+        mapLayers
+          ..clear()
+          ..addAll((j['mapLayers'] as List).cast<String>());
+        if (!mapLayers.contains('fuelLT') && !mapLayers.contains('fuelPL')) mapLayers.addAll({'fuelLT', 'fuelPL'});
+      }
+      mapChains
+        ..clear()
+        ..addAll(((j['mapChains'] as List?) ?? []).cast<String>());
+      mapOpenOnly = j['mapOpenOnly'] as bool? ?? false;
       ltShop = j['ltShop'] as String? ?? 'maxima';
       items
         ..clear()
@@ -598,6 +645,8 @@ class AppState extends ChangeNotifier {
           'cardFeePct': cardFeePct, 'items': items.map((e) => e.toJson()).toList(), 'rate': rate?.toJson(), 'priceFixes': priceFixes,
           'storeChoice': storeChoice,
           'tripReady': tripReady, 'tripChains': tripChains, 'cards': cards.toList(), 'tripDate': tripDate, 'ltShop': ltShop,
+          'wallet': wallet.map((c) => c.toJson()).toList(), 'seenFuel': seenFuel.map((k, v) => MapEntry(k, v.toJson())),
+          'mapLayers': mapLayers.toList(), 'mapChains': mapChains.toList(), 'mapOpenOnly': mapOpenOnly,
           'watch': watch.map((w) => w.toJson()).toList(), 'alerted': alerted.toList(), 'alertsOn': alertsOn,
           'trips': trips.map((t) => t.toJson()).toList(),
           'priceMemory': priceMemory.map((k, v) => MapEntry(k, {'pl': v.pl, 'chain': v.chain, 'date': v.date})),
@@ -643,6 +692,13 @@ class AppState extends ChangeNotifier {
     tripReady = false;
     tripChains.clear();
     cards.clear();
+    wallet.clear();
+    seenFuel.clear();
+    mapLayers
+      ..clear()
+      ..addAll({'shops', 'fuel', 'fuelLT', 'fuelPL'});
+    mapChains.clear();
+    mapOpenOnly = false;
     tripDate = null;
     ltShop = 'maxima';
     priceFixes.clear();

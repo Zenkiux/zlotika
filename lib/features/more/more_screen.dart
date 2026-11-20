@@ -67,13 +67,11 @@ class MoreScreen extends StatelessWidget {
           ),
         );
 
-    return SafeArea(
-      bottom: false,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+    return Scaffold(
+      appBar: AppBar(title: Text(context.s('moreTitle'))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
         children: [
-          Text(context.s('moreTitle'), style: context.tt.headlineMedium),
-          const SizedBox(height: 22),
           block(context.s('setLang'),
               Segmented<Lang>(value: s.lang, options: const [(Lang.lt, 'Lietuvių'), (Lang.en, 'English')], onChanged: (v) => s.update((x) => x.lang = v))),
           block(
@@ -141,4 +139,16 @@ class MoreScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The same gear in the same corner of every tab: settings and tools.
+class SettingsButton extends StatelessWidget {
+  const SettingsButton({super.key});
+
+  @override
+  Widget build(BuildContext context) => RoundIcon(
+        Icons.settings_outlined,
+        tooltip: context.s('moreTitle'),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MoreScreen())),
+      );
 }

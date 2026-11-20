@@ -8,9 +8,10 @@ import 'deals.dart';
 /// Typical shelf price for one vocabulary item in one country, from the daily collector:
 /// Lithuania from Barbora (Maxima online), Poland from Rossmann (and Frisco when enabled).
 class RefPrice {
-  const RefPrice({required this.source, required this.unit, required this.n, required this.unitMin, required this.unitMedian, required this.pkgMedian, required this.exName, required this.exPrice, required this.exUnitPrice, required this.exUrl});
+  const RefPrice({required this.source, this.promo = false, required this.unit, required this.n, required this.unitMin, required this.unitMedian, required this.pkgMedian, required this.exName, required this.exPrice, required this.exUnitPrice, required this.exUrl});
 
-  final String source; // 'Barbora', 'Rossmann', 'Frisco'
+  final String source; // 'Barbora', 'Rossmann', 'Frisco', 'Lidl', 'IKI', 'Norfa'
+  final bool promo; // this week's leaflet price (Lidl LT, IKI, Norfa), not a usual shelf price
   final String unit; // 'kg' | 'l' | 'units'
   final int n;
   final double unitMin, unitMedian, pkgMedian;
@@ -20,10 +21,11 @@ class RefPrice {
   /// Size of the example package, in [unit].
   double get exQty => exUnitPrice > 0 ? exPrice / exUnitPrice : 0;
 
-  factory RefPrice.fromJson(Map<String, dynamic> j) {
+  factory RefPrice.fromJson(Map<String, dynamic> j, {bool promo = false}) {
     final ex = j['example'] as Map<String, dynamic>;
     return RefPrice(
       source: j['source'] as String,
+      promo: promo,
       unit: j['unit'] as String,
       n: (j['n'] as num).toInt(),
       unitMin: (j['unitMin'] as num).toDouble(),
@@ -38,17 +40,20 @@ class RefPrice {
 }
 
 class PriceFeed {
-  PriceFeed(this.lt, this.pl, this.generatedAt, {this.ltRimi = const {}});
+  PriceFeed(this.lt, this.pl, this.generatedAt, {this.ltRimi = const {}, this.ltPromo = const {}});
   final Map<String, RefPrice> lt, pl; // keyed by the Polish shelf name (Term.pl); lt = Maxima (Barbora)
   final Map<String, RefPrice> ltRimi; // Rimi online shop
+  /// This week's leaflet prices per chain ('lidl', 'iki', 'norfa') — only items on promotion.
+  final Map<String, Map<String, RefPrice>> ltPromo;
   final DateTime? generatedAt;
 
-  static Map<String, RefPrice> _side(Object? o) =>
-      ((o as Map?) ?? {}).map((k, v) => MapEntry('$k', RefPrice.fromJson(v as Map<String, dynamic>)));
+  static Map<String, RefPrice> _side(Object? o, {bool promo = false}) =>
+      ((o as Map?) ?? {}).map((k, v) => MapEntry('$k', RefPrice.fromJson(v as Map<String, dynamic>, promo: promo)));
 
   static PriceFeed parse(String body) {
     final j = jsonDecode(body) as Map<String, dynamic>;
-    return PriceFeed(_side(j['lt']), _side(j['pl']), DateTime.tryParse(j['generatedAt'] as String? ?? ''), ltRimi: _side(j['ltRimi']));
+    return PriceFeed(_side(j['lt']), _side(j['pl']), DateTime.tryParse(j['generatedAt'] as String? ?? ''), ltRimi: _side(j['ltRimi']),
+        ltPromo: ((j['ltPromo'] as Map?) ?? {}).map((k, v) => MapEntry('$k', _side(v, promo: true))));
   }
 
   static Future<String> bundled() => rootBundle.loadString('assets/data/prices.json');

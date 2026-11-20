@@ -6,7 +6,8 @@ import '../../core/format.dart';
 import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../../data/chains.dart';
-import '../../main.dart';
+import '../../main.dart' show shellTab, Tabs;
+import '../more/more_screen.dart' show SettingsButton;
 import '../../widgets/ui.dart';
 import '../scan/scan_screen.dart';
 import '../trip/trip_screen.dart' show ChainDot;
@@ -39,12 +40,16 @@ class ListScreen extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
             children: [
-              Row(children: [
-                Expanded(child: Text(context.s('listTitle'), style: context.tt.headlineMedium)),
-                if (s.items.any((e) => e.checked))
-                  TextButton(onPressed: s.clearChecked, child: Text(context.s('listClearChecked'), style: context.tt.labelMedium)),
-              ]),
-              const SizedBox(height: 10),
+              PageHeader(
+                context.s('listTitle'),
+                subtitle: context.s('listHeaderSub'),
+                trailing: const SettingsButton(),
+              ),
+              if (s.items.any((e) => e.checked))
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(onPressed: s.clearChecked, child: Text(context.s('listClearChecked'), style: context.tt.labelMedium)),
+                ),
               const _TripLine(),
               const SizedBox(height: 14),
               if (s.items.isEmpty)
@@ -84,7 +89,7 @@ class _TripLine extends StatelessWidget {
     if (!s.tripReady || s.tripChains.isEmpty) {
       return Panel(
         color: c.warnSoft,
-        onTap: () => shellTab.value = 0,
+        onTap: () => shellTab.value = Tabs.trip,
         child: Row(children: [
           Icon(Icons.storefront_rounded, color: c.warn, size: 28),
           const SizedBox(width: 14),
@@ -95,7 +100,7 @@ class _TripLine extends StatelessWidget {
     }
     final shops = s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ');
     return Panel(
-      onTap: () => shellTab.value = 0,
+      onTap: () => shellTab.value = Tabs.trip,
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
       child: Row(children: [
         Icon(Icons.storefront_rounded, color: c.text2),

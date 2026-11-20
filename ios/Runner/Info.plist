@@ -37,8 +37,10 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>To choose a photo of a price tag you want to report.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Vieta naudojama tik žemėlapyje parodyti, kur esate. / Your location is only used to show where you are on the map.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Kamera naudojama tik prekės brūkšniniam kodui nuskaityti. / The camera is only used to scan product barcodes.</string>
+	<string>Kamera naudojama tik prekių ir lojalumo kortelių brūkšniniams kodams nuskaityti. / The camera is only used to scan product and loyalty card barcodes.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

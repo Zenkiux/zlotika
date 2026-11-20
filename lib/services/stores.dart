@@ -9,11 +9,12 @@ import 'deals.dart' show kFeedBase;
 
 /// A shop or fuel station from OpenStreetMap (© OpenStreetMap contributors, ODbL).
 class Store {
-  const Store({required this.id, required this.chain, required this.brand, this.name, required this.town, required this.lat, required this.lon, this.address, this.hours});
+  const Store({required this.id, required this.chain, required this.brand, this.name, required this.town, required this.lat, required this.lon, this.address, this.hours, this.country = 'PL'});
 
   final String id, chain, brand, town; // chain = app chain id, or 'fuel'
   final String? name, address, hours; // hours = raw OSM opening_hours
   final double lat, lon;
+  final String country; // 'LT' or 'PL'
 
   bool get isFuel => chain == 'fuel';
 
@@ -27,6 +28,7 @@ class Store {
         lon: (j['lon'] as num).toDouble(),
         address: j['address'] as String?,
         hours: j['hours'] as String?,
+        country: j['country'] as String? ?? 'PL',
       );
 }
 
@@ -43,6 +45,7 @@ class StoreFeed {
     // Typical hours per chain and town: the most common value among shops that list one.
     final counts = <String, Map<String, int>>{};
     for (final s in stores) {
+      if (s.town == 'route') continue;
       if (s.hours == null || OpeningHours.parse(s.hours) == null) continue;
       for (final key in ['${s.town}/${s.chain}', s.chain]) {
         final m = counts.putIfAbsent(key, () => {});

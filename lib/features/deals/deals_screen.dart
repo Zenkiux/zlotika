@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../data/chains.dart';
 import '../../data/dictionary.dart';
 import '../../services/deals.dart';
+import '../more/more_screen.dart' show SettingsButton;
 import '../../widgets/ui.dart';
 import '../list/add_item_screen.dart' show newId;
 import '../list/deal_pick.dart' show showAddedSnack;
@@ -93,13 +94,11 @@ class _DealsScreenState extends State<DealsScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             sliver: SliverList.list(children: [
-              Text(context.s('dealsTitle'), style: context.tt.headlineMedium),
-              const SizedBox(height: 4),
-              Text(
-                s.feed != null ? context.s('dealsUpdated', {'ago': agoText(context, s.feed!.generatedAt)}) : context.s('leafletsSub'),
-                style: context.tt.bodyMedium,
+              PageHeader(
+                context.s('dealsTitle'),
+                subtitle: s.feed != null ? context.s('dealsUpdated', {'ago': agoText(context, s.feed!.generatedAt)}) : context.s('leafletsSub'),
+                trailing: const SettingsButton(),
               ),
-              const SizedBox(height: 16),
               Segmented<int>(
                 value: _view,
                 options: [(0, context.s('dealsTabDeals')), (1, context.s('dealsTabLeaflets'))],

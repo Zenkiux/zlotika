@@ -36,7 +36,7 @@ class LogoMark extends StatelessWidget {
 
 /// Surface card. Tappable when [onTap] is given.
 class Panel extends StatelessWidget {
-  const Panel({super.key, required this.child, this.onTap, this.padding = const EdgeInsets.all(20), this.color, this.radius = 24, this.border});
+  const Panel({super.key, required this.child, this.onTap, this.padding = const EdgeInsets.all(16), this.color, this.radius = 18, this.border});
   final Widget child;
   final VoidCallback? onTap;
   final EdgeInsets padding;
@@ -48,7 +48,11 @@ class Panel extends StatelessWidget {
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(radius),
-      side: border == null ? BorderSide.none : BorderSide(color: border!, width: 1.5),
+      side: border != null
+          ? BorderSide(color: border!, width: 1.5)
+          : color == null
+              ? BorderSide(color: context.c.line)
+              : BorderSide.none,
     );
     return Material(
       color: color ?? context.c.surface,
@@ -83,7 +87,7 @@ class BigButton extends StatelessWidget {
     final c = context.c;
     final (bg, fg) = switch (kind) {
       BtnKind.primary => (Brand.yellow, Brand.ink),
-      BtnKind.secondary => (c.raised, c.text),
+      BtnKind.secondary => (c.surface, c.text),
       BtnKind.ghost => (Colors.transparent, c.text),
       BtnKind.danger => (c.badSoft, c.bad),
     };
@@ -91,7 +95,7 @@ class BigButton extends StatelessWidget {
       mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (icon != null) ...[Icon(icon, size: 22, color: fg), const SizedBox(width: 10)],
+        if (icon != null) ...[Icon(icon, size: 20, color: fg), const SizedBox(width: 9)],
         Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, textAlign: TextAlign.center, style: context.tt.labelLarge!.copyWith(color: fg)))),
       ],
     );
@@ -99,7 +103,10 @@ class BigButton extends StatelessWidget {
       button: true,
       child: Material(
         color: onPressed == null ? bg.withValues(alpha: .4) : bg,
-        borderRadius: BorderRadius.circular(18),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: kind == BtnKind.secondary ? BorderSide(color: c.line) : BorderSide.none,
+        ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onPressed == null
@@ -109,8 +116,8 @@ class BigButton extends StatelessWidget {
                   onPressed!();
                 },
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 58),
-            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14), child: child),
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Padding(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13), child: child),
           ),
         ),
       ),
@@ -120,7 +127,7 @@ class BigButton extends StatelessWidget {
 
 /// Round icon in a soft tile, used as a visual anchor for rows and actions.
 class IconTile extends StatelessWidget {
-  const IconTile(this.icon, {super.key, this.color, this.bg, this.size = 48});
+  const IconTile(this.icon, {super.key, this.color, this.bg, this.size = 40});
   final IconData icon;
   final Color? color, bg;
   final double size;
@@ -129,9 +136,9 @@ class IconTile extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: bg ?? context.c.raised, borderRadius: BorderRadius.circular(size * .32)),
+        decoration: BoxDecoration(color: bg ?? context.c.raised, borderRadius: BorderRadius.circular(size * .3)),
         alignment: Alignment.center,
-        child: Icon(icon, size: size * .5, color: color ?? context.c.text),
+        child: Icon(icon, size: size * .52, color: color ?? context.c.text),
       );
 }
 
@@ -142,7 +149,7 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(4, 28, 4, 12),
+        padding: const EdgeInsets.fromLTRB(2, 26, 2, 10),
         child: Row(children: [Expanded(child: Text(text, style: context.tt.titleLarge)), ?trailing]),
       );
 }
@@ -156,8 +163,8 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (icon != null) ...[Icon(icon, size: 15, color: fg), const SizedBox(width: 5)],
           Flexible(child: Text(text, style: context.tt.labelMedium!.copyWith(color: fg, fontWeight: FontWeight.w700))),
@@ -237,10 +244,10 @@ class ChoiceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 8),
         child: Panel(
           onTap: onTap,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: selected ? Brand.yellow : null,
           child: Row(children: [
             if (leading != null) ...[leading!, const SizedBox(width: 14)],
@@ -253,8 +260,8 @@ class ChoiceRow extends StatelessWidget {
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
               child: selected
-                  ? const Icon(Icons.check_circle_rounded, key: ValueKey(1), color: Brand.yellow, size: 28)
-                  : Icon(Icons.circle_outlined, key: const ValueKey(0), color: context.c.line, size: 28),
+                  ? const Icon(Icons.check_circle_rounded, key: ValueKey(1), color: Brand.yellow, size: 26)
+                  : Icon(Icons.circle_outlined, key: const ValueKey(0), color: context.c.text3, size: 26),
             ),
           ]),
         ),
@@ -283,7 +290,7 @@ class Segmented<T> extends StatelessWidget {
     final c = context.c;
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: c.raised, borderRadius: BorderRadius.circular(14)),
       child: Row(children: [
         for (final (v, label) in options)
           Expanded(
@@ -291,10 +298,10 @@ class Segmented<T> extends StatelessWidget {
               onTap: () => onChanged(v),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                constraints: const BoxConstraints(minHeight: 48),
+                constraints: const BoxConstraints(minHeight: 44),
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                decoration: BoxDecoration(color: v == value ? Brand.yellow : Colors.transparent, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: v == value ? Brand.yellow : Colors.transparent, borderRadius: BorderRadius.circular(10)),
                 child: Text(label,
                     textAlign: TextAlign.center,
                     style: context.tt.titleMedium!.copyWith(color: v == value ? Brand.ink : c.text2, fontWeight: v == value ? FontWeight.w700 : FontWeight.w500)),
@@ -304,4 +311,104 @@ class Segmented<T> extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Every tab starts the same way: what this page is, one line on what it is for,
+/// and the settings button in the same corner. Nobody has to guess where they are.
+class PageHeader extends StatelessWidget {
+  const PageHeader(this.title, {super.key, this.subtitle, this.trailing, this.eyebrow});
+  final String title;
+  final String? subtitle, eyebrow;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (eyebrow != null) Padding(padding: const EdgeInsets.only(bottom: 2), child: Text(eyebrow!, style: context.tt.labelMedium!.copyWith(color: context.c.text3))),
+              Text(title, style: context.tt.headlineMedium),
+              if (subtitle != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(subtitle!, style: context.tt.bodyMedium)),
+            ]),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+        ]),
+      );
+}
+
+/// Small round icon button with a hairline border, for header actions.
+class RoundIcon extends StatelessWidget {
+  const RoundIcon(this.icon, {super.key, required this.onTap, this.tooltip, this.filled = false});
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.c;
+    final btn = Material(
+      color: filled ? Brand.yellow : c.surface,
+      shape: CircleBorder(side: filled ? BorderSide.none : BorderSide(color: c.line)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        child: SizedBox(width: 44, height: 44, child: Icon(icon, size: 21, color: filled ? Brand.ink : c.text)),
+      ),
+    );
+    return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
+  }
+}
+
+/// A plain list row: icon, title, optional subtitle and value, chevron. Grouped inside a [Panel].
+class RowTile extends StatelessWidget {
+  const RowTile({super.key, required this.icon, required this.title, this.subtitle, this.value, this.onTap, this.iconColor, this.last = false});
+  final IconData icon;
+  final String title;
+  final String? subtitle, value;
+  final VoidCallback? onTap;
+  final Color? iconColor;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.c;
+    return InkWell(
+      onTap: onTap == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              onTap!();
+            },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(border: last ? null : Border(bottom: BorderSide(color: c.line))),
+        child: Row(children: [
+          IconTile(icon, size: 36, color: iconColor ?? (Theme.of(context).brightness == Brightness.dark ? Brand.yellow : Brand.ink)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: context.tt.titleMedium),
+              if (subtitle != null) Text(subtitle!, style: context.tt.bodySmall!.copyWith(color: c.text2)),
+            ]),
+          ),
+          if (value != null) ...[const SizedBox(width: 8), Text(value!, style: context.tt.titleMedium!.copyWith(color: c.text2))],
+          if (onTap != null) ...[const SizedBox(width: 4), Icon(Icons.chevron_right_rounded, color: c.text3)],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Rows in one bordered group, like iOS settings: easier to scan than a stack of cards.
+class RowGroup extends StatelessWidget {
+  const RowGroup({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Panel(padding: EdgeInsets.zero, child: Column(children: children));
 }

@@ -62,4 +62,20 @@ void main() {
     s.ltShop = 'cheapest';
     expect(s.ltRef(i)!.unitMedian, 14.95);
   });
+
+  test('Lidl, IKI and Norfa use this week\'s leaflet price, else Maxima', () async {
+    final s = await _state();
+    final feed = PriceFeed.parse('''{"lt": {"Masło": {"source": "Barbora", "unit": "kg", "n": 8, "unitMin": 7, "unitMedian": 8.2, "pkgMedian": 1.64,
+        "example": {"name": "x", "price": 1.64, "unitPrice": 8.2, "url": ""}}},
+      "ltPromo": {"iki": {"Masło": {"source": "IKI", "unit": "kg", "n": 1, "unitMin": 5.95, "unitMedian": 5.95, "pkgMedian": 1.19,
+        "example": {"name": "ROKIŠKIO sviestas 200 g", "price": 1.19, "unitPrice": 5.95, "url": ""}}}}, "pl": {}}''');
+    s.priceFeed = feed;
+    final butter = ListItem(id: 'b', name: 'Sviestas', plName: 'Masło');
+    s.ltShop = 'iki';
+    expect(s.ltRef(butter)!.source, 'IKI');
+    expect(s.ltRef(butter)!.promo, isTrue);
+    s.ltShop = 'norfa'; // nothing in Norfa's leaflet → usual Maxima price
+    expect(s.ltRef(butter)!.source, 'Barbora');
+    expect(s.ltRef(butter)!.promo, isFalse);
+  });
 }

@@ -10,9 +10,10 @@ import '../../core/theme.dart';
 import '../../data/calendar.dart';
 import '../../data/chains.dart';
 import '../../data/geo.dart';
-import '../../main.dart';
+import '../../main.dart' show shellTab, Tabs;
 import '../../services/fuel.dart';
 import '../../services/stores.dart';
+import '../more/more_screen.dart' show SettingsButton;
 import '../../widgets/ui.dart';
 import '../history/history_screen.dart';
 import '../list/add_item_screen.dart';
@@ -327,7 +328,8 @@ class _CardsPicker extends StatelessWidget {
   }
 }
 
-String _ltShopName(BuildContext context, String id) => switch (id) { 'rimi' => 'Rimi', 'cheapest' => context.s('tripHomeCheapest'), _ => 'Maxima' };
+String _ltShopName(BuildContext context, String id) =>
+    switch (id) { 'rimi' => 'Rimi', 'lidl' => 'Lidl', 'iki' => 'IKI', 'norfa' => 'Norfa', 'cheapest' => context.s('tripHomeCheapest'), _ => 'Maxima' };
 
 /// Where the shopper buys at home: savings are compared with that shop's prices.
 class _LtShopPicker extends StatelessWidget {
@@ -341,7 +343,7 @@ class _LtShopPicker extends StatelessWidget {
       for (final id in AppState.ltShops)
         ChoiceRow(
           title: _ltShopName(context, id),
-          subtitle: id == 'cheapest' ? context.s('tripHomeCheapestSub') : null,
+          subtitle: switch (id) { 'cheapest' => context.s('tripHomeCheapestSub'), 'lidl' || 'iki' || 'norfa' => context.s('tripHomeLeafletSub'), _ => null },
           selected: s.ltShop == id,
           leading: Icon(id == 'cheapest' ? Icons.savings_rounded : Icons.storefront_rounded, color: Brand.yellow),
           onTap: () {
@@ -527,12 +529,12 @@ class _Overview extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
         children: [
-          Row(children: [
-            const LogoMark(size: 36),
-            const SizedBox(width: 10),
-            Expanded(child: Text(context.s('tripHeader'), style: context.tt.headlineMedium)),
-          ]),
-          const SizedBox(height: 16),
+          PageHeader(
+            '${s.origin.name} → ${destById(s.destId).name}',
+            eyebrow: _dayLabel(context, day),
+            subtitle: r == null ? null : '1 € = ${fmtNum(r.mid, lang, digits: 2)} zł · ${s.tripChains.map((x) => chainById(x)?.name ?? x).join(', ')}',
+            trailing: const SettingsButton(),
+          ),
           const _PriceCheck(),
           const SizedBox(height: 12),
           const _TripFacts(),
@@ -578,7 +580,7 @@ class _Overview extends StatelessWidget {
             label: context.s('tripList', {'n': open}),
             icon: Icons.shopping_bag_rounded,
             kind: BtnKind.secondary,
-            onPressed: () => shellTab.value = 1,
+            onPressed: () => shellTab.value = Tabs.list,
           ),
           const SizedBox(height: 10),
           BigButton(
@@ -806,7 +808,7 @@ class _Result extends StatelessWidget {
         child: Column(children: [
           row(Icons.shopping_bag_rounded, context.s('rowShopping'),
               context.s('tripPriced', {'n': t.basket.priced, 'm': open.length}), eurSigned(t.shopping, lang),
-              color: c.good, onTap: () => shellTab.value = 1),
+              color: c.good, onTap: () => shellTab.value = Tabs.list),
           Divider(color: c.line, height: 1),
           row(Icons.local_gas_station_rounded, context.s('rowFuelTrip'),
               '${t.km} km · ${fmtNum(t.litres, lang)} l × ${eur(t.ltFuel!, lang, digits: 3)}', eurSigned(-t.tripCost, lang),
@@ -1001,7 +1003,7 @@ class _StopCard extends StatelessWidget {
                   Text(context.s('planFuelLitres', {'l': s.refuelLitres}), style: context.tt.bodyMedium)
                 else
                   InkWell(
-                    onTap: () => shellTab.value = 1,
+                    onTap: () => shellTab.value = Tabs.list,
                     child: Text(
                       stop.items.isEmpty
                           ? context.s('tripStopNoItems')
