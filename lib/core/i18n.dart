@@ -395,6 +395,11 @@ const _lt = <String, String>{
   'calcClear': 'Išvalyti',
   'calcClearQ': 'Išvalyti krepšelį?',
   'calcSwipe': 'Klaidą ištrinsite perbraukę eilutę į kairę.',
+  'calcDiscount': 'Nuolaida',
+  'calcNoDiscount': 'Nėra',
+  'calcOther': 'Kita %',
+  'calcTypePct': 'Įveskite nuolaidos procentą klaviatūra',
+  'calcSaved': 'Nuolaidos: −{v}',
 };
 
 const _en = <String, String>{
@@ -786,6 +791,11 @@ const _en = <String, String>{
   'calcClear': 'Clear',
   'calcClearQ': 'Clear the basket?',
   'calcSwipe': 'Swipe a line left to delete a mistake.',
+  'calcDiscount': 'Discount',
+  'calcNoDiscount': 'None',
+  'calcOther': 'Other %',
+  'calcTypePct': 'Type the discount percent on the keypad',
+  'calcSaved': 'Discounts: −{v}',
 };
 
 /// Translation without a BuildContext (notifications, background work).

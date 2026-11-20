@@ -21,11 +21,25 @@ class CalcScreen extends StatefulWidget {
 class _CalcScreenState extends State<CalcScreen> {
   String _input = ''; // what's being typed, e.g. "3,49"
   int _qty = 1;
+  int _pct = 0; // discount shown on the shelf, applied to this price
+  bool _typingPct = false; // keypad edits the discount instead of the price
+  String _pctInput = '';
 
   double? get _value => double.tryParse(_input.replaceAll(',', '.'));
 
   void _key(String k) {
     HapticFeedback.selectionClick();
+    if (_typingPct) {
+      setState(() {
+        if (k == '⌫') {
+          if (_pctInput.isNotEmpty) _pctInput = _pctInput.substring(0, _pctInput.length - 1);
+        } else if (k != ',' && _pctInput.length < 2) {
+          _pctInput = _pctInput == '0' ? k : _pctInput + k;
+        }
+        _pct = int.tryParse(_pctInput) ?? 0;
+      });
+      return;
+    }
     setState(() {
       if (k == '⌫') {
         if (_input.isNotEmpty) _input = _input.substring(0, _input.length - 1);
@@ -44,10 +58,13 @@ class _CalcScreenState extends State<CalcScreen> {
     final v = _value;
     if (v == null || v <= 0) return;
     HapticFeedback.mediumImpact();
-    AppScope.read(context).update((s) => s.calc.add((price: v, qty: _qty)));
+    AppScope.read(context).update((s) => s.calc.add((price: v, qty: _qty, pct: _pct)));
     setState(() {
       _input = '';
       _qty = 1;
+      _pct = 0;
+      _typingPct = false;
+      _pctInput = '';
     });
   }
 
@@ -73,7 +90,7 @@ class _CalcScreenState extends State<CalcScreen> {
     final total = s.calcTotal;
     final eurTotal = s.toEur(total);
     final v = _value;
-    final pending = v == null ? null : v * _qty;
+    final pending = v == null ? null : AppState.calcLine((price: v, qty: _qty, pct: _pct));
 
     Widget key(String label, {Color? bg, Color? fg, VoidCallback? onTap, IconData? icon, int flex = 1}) => Expanded(
           flex: flex,
@@ -111,7 +128,11 @@ class _CalcScreenState extends State<CalcScreen> {
               borderRadius: BorderRadius.circular(18),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(context.s('calcTotal', {'n': s.calcCount}), style: context.tt.labelMedium!.copyWith(color: Brand.ink.withValues(alpha: .72), fontSize: 12)),
+              Row(children: [
+                Expanded(child: Text(context.s('calcTotal', {'n': s.calcCount}), style: context.tt.labelMedium!.copyWith(color: Brand.ink.withValues(alpha: .72), fontSize: 12))),
+                if (s.calcSaved > 0.004)
+                  Text(context.s('calcSaved', {'v': zl(s.calcSaved, lang)}), style: context.tt.labelMedium!.copyWith(color: Brand.ink, fontSize: 12, fontWeight: FontWeight.w700)),
+              ]),
               const SizedBox(height: 2),
               FittedBox(
                 fit: BoxFit.scaleDown,
@@ -138,7 +159,7 @@ class _CalcScreenState extends State<CalcScreen> {
                     itemBuilder: (_, i) {
                       final idx = s.calc.length - 1 - i;
                       final e = s.calc[idx];
-                      final line = e.price * e.qty;
+                      final line = AppState.calcLine(e);
                       final le = s.toEur(line);
                       return Dismissible(
                         key: ValueKey('$idx-${e.price}-${e.qty}-${s.calc.length}'),
@@ -151,7 +172,7 @@ class _CalcScreenState extends State<CalcScreen> {
                           child: Row(children: [
                             SizedBox(width: 28, child: Text('${idx + 1}.', style: context.tt.bodySmall)),
                             Expanded(
-                              child: Text(e.qty > 1 ? '${zl(e.price, lang)} × ${e.qty}' : zl(e.price, lang),
+                              child: Text('${zl(e.price, lang)}${e.pct > 0 ? ' −${e.pct} %' : ''}${e.qty > 1 ? ' × ${e.qty}' : ''}',
                                   style: context.tt.titleMedium!.copyWith(color: c.text2, fontFeatures: const [FontFeature.tabularFigures()])),
                             ),
                             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -170,15 +191,16 @@ class _CalcScreenState extends State<CalcScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 6),
             child: Row(children: [
-              Expanded(
-                child: Text(_input.isEmpty ? '0' : _input,
-                    style: context.tt.displayMedium!.copyWith(fontSize: 34, color: _input.isEmpty ? c.text3 : c.text, fontFeatures: const [FontFeature.tabularFigures()])),
-              ),
+              Text(_input.isEmpty ? '0' : _input,
+                  style: context.tt.displayMedium!.copyWith(fontSize: 34, color: _input.isEmpty ? c.text3 : c.text, fontFeatures: const [FontFeature.tabularFigures()])),
               Text(' zł', style: context.tt.headlineSmall!.copyWith(color: c.text2)),
-              if (pending != null && s.toEur(pending) != null) ...[
-                const SizedBox(width: 10),
-                Text('≈ ${eur(s.toEur(pending)!, lang)}', style: context.tt.titleMedium!.copyWith(color: c.text2)),
-              ],
+              const Spacer(),
+              if (pending != null)
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  if (_pct > 0 || _qty > 1)
+                    Text('= ${zl(pending, lang)}', style: context.tt.titleLarge!.copyWith(color: c.accentText, fontFeatures: const [FontFeature.tabularFigures()])),
+                  if (s.toEur(pending) != null) Text('≈ ${eur(s.toEur(pending)!, lang)}', style: context.tt.titleMedium!.copyWith(color: c.text2)),
+                ]),
             ]),
           ),
           // Quantity
@@ -194,6 +216,37 @@ class _CalcScreenState extends State<CalcScreen> {
                 ),
             ]),
           ),
+          const SizedBox(height: 6),
+          // Discount printed on the shelf ("-20 %") when the new price isn't
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                Text(context.s('calcDiscount'), style: context.tt.labelMedium),
+                const SizedBox(width: 10),
+                for (final p in [0, 10, 20, 25, 30, 40, 50])
+                  FilterChip2(
+                    label: p == 0 ? context.s('calcNoDiscount') : '−$p %',
+                    active: !_typingPct && _pct == p,
+                    onTap: () => setState(() {
+                      _pct = p;
+                      _typingPct = false;
+                      _pctInput = '';
+                    }),
+                  ),
+                FilterChip2(
+                  label: _typingPct ? '−${_pctInput.isEmpty ? '…' : _pctInput} %' : context.s('calcOther'),
+                  active: _typingPct || (_pct != 0 && ![10, 20, 25, 30, 40, 50].contains(_pct)),
+                  onTap: () => setState(() {
+                    _typingPct = !_typingPct;
+                    if (_typingPct) _pctInput = '';
+                  }),
+                ),
+              ]),
+            ),
+          ),
+          if (_typingPct) Padding(padding: const EdgeInsets.only(top: 4), child: Text(context.s('calcTypePct'), style: context.tt.bodySmall!.copyWith(color: c.accentText))),
           const SizedBox(height: 6),
           // Keypad
           Padding(

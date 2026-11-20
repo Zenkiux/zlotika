@@ -138,8 +138,11 @@ class AppState extends ChangeNotifier {
   final Set<String> routeDone = {};
 
   // In-shop calculator: prices (zł) added while shopping, so the cart total is known live.
-  final List<({double price, int qty})> calc = [];
-  double get calcTotal => calc.fold(0.0, (a, e) => a + e.price * e.qty);
+  // price = shelf price per item; pct = discount the shelf promises (e.g. −20 %) but doesn't print.
+  final List<({double price, int qty, int pct})> calc = [];
+  static double calcLine(({double price, int qty, int pct}) e) => ((e.price * (100 - e.pct) / 100) * 100).roundToDouble() / 100 * e.qty;
+  double get calcTotal => calc.fold(0.0, (a, e) => a + calcLine(e));
+  double get calcSaved => calc.fold(0.0, (a, e) => a + e.price * e.qty - calcLine(e));
   int get calcCount => calc.fold(0, (a, e) => a + e.qty);
   String navApp = 'gmaps'; // gmaps | waze | apple
 
@@ -667,7 +670,7 @@ class AppState extends ChangeNotifier {
       navApp = j['navApp'] as String? ?? 'gmaps';
       calc
         ..clear()
-        ..addAll(((j['calc'] as List?) ?? []).map((e) => (price: ((e as Map)['p'] as num).toDouble(), qty: (e['q'] as num?)?.toInt() ?? 1)));
+        ..addAll(((j['calc'] as List?) ?? []).map((e) => (price: ((e as Map)['p'] as num).toDouble(), qty: (e['q'] as num?)?.toInt() ?? 1, pct: (e['d'] as num?)?.toInt() ?? 0)));
       ltShop = j['ltShop'] as String? ?? 'maxima';
       items
         ..clear()
@@ -723,7 +726,7 @@ class AppState extends ChangeNotifier {
           'wallet': wallet.map((c) => c.toJson()).toList(), 'seenFuel': seenFuel.map((k, v) => MapEntry(k, v.toJson())),
           'mapLayers': mapLayers.toList(), 'mapChains': mapChains.toList(), 'mapOpenOnly': mapOpenOnly,
           'routeOrder': routeOrder, 'routeDone': routeDone.toList(), 'navApp': navApp,
-          'calc': [for (final e in calc) {'p': e.price, 'q': e.qty}],
+          'calc': [for (final e in calc) {'p': e.price, 'q': e.qty, 'd': e.pct}],
           'watch': watch.map((w) => w.toJson()).toList(), 'alerted': alerted.toList(), 'alertsOn': alertsOn,
           'trips': trips.map((t) => t.toJson()).toList(),
           'priceMemory': priceMemory.map((k, v) => MapEntry(k, {'pl': v.pl, 'chain': v.chain, 'date': v.date})),
