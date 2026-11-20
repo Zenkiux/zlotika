@@ -209,7 +209,7 @@ class _ItemSheetState extends State<_ItemSheet> {
               for (final d in elsewhere)
                 Row(children: [
                   Expanded(
-                    child: Text('${chainById(d.chain)?.name ?? d.chain}: ${zl(s.dealPrice(d), lang)} · ${shortDealName(d.name)}',
+                    child: Text('${chainById(d.chain)?.name ?? d.chain}: ${zl(s.dealPrice(d), lang)} · ${dealName(context, d)}',
                         maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.bodyMedium),
                   ),
                   TextButton(

@@ -374,7 +374,19 @@ Future<T?> showSheet<T>(BuildContext context, Widget Function(BuildContext) buil
       useSafeArea: true,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: builder(ctx),
+        child: Stack(children: [
+          builder(ctx),
+          // A visible way out, not only the swipe-down handle.
+          Positioned(
+            top: 0,
+            right: 10,
+            child: IconButton(
+              tooltip: MaterialLocalizations.of(ctx).closeButtonTooltip,
+              onPressed: () => Navigator.pop(ctx),
+              icon: Icon(Icons.close_rounded, size: 22, color: ctx.c.text3),
+            ),
+          ),
+        ]),
       ),
     );
 

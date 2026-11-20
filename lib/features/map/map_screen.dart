@@ -15,6 +15,7 @@ import '../../data/geo.dart';
 import '../../main.dart' show shellTab, Tabs;
 import '../../services/stores.dart';
 import '../../services/wallet.dart';
+import '../../services/ltfuel.dart' show PlReport;
 import '../../widgets/ui.dart';
 import '../cards/cards_screen.dart' show showCard;
 import '../more/more_screen.dart';
@@ -53,7 +54,14 @@ class _MapScreenState extends State<MapScreen> {
     final f = s.storeFeed;
     if (f == null) return const [];
     final p = plNow();
-    return f.stores.where((st) {
+    // Lithuanian stations: LEA's list (with today's prices) replaces OpenStreetMap's where loaded.
+    final lt = s.ltStations;
+    final all = [
+      for (final st in f.stores)
+        if (!(lt != null && st.isFuel && st.country == 'LT')) st,
+      if (lt != null) for (final x in lt.stations) x.store,
+    ];
+    return all.where((st) {
       if (st.isFuel) {
         if (!s.mapLayers.contains('fuel')) return false;
         if (!s.mapLayers.contains('fuel${st.country}')) return false;
@@ -89,11 +97,7 @@ class _MapScreenState extends State<MapScreen> {
           interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
         ),
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'lt.zlotika.zlotika',
-            tileBuilder: dark ? darkModeTileBuilder : null,
-          ),
+          osmTiles(context),
           MarkerLayer(markers: [
             for (final st in stores)
               Marker(
@@ -460,9 +464,13 @@ class _FuelPrices extends StatelessWidget {
     final f = s.fuelFeed;
     final lt = st.country == 'LT';
     final seen = s.seenFuel[st.id];
+    final real = st.id.startsWith('lea:') ? s.ltStations?.byId(st.id) : null;
+    final reported = !lt ? s.plReports?.near(st.lat, st.lon) : null;
+    PlReport? rep(String k) => reported == null ? null : switch (k) { 'pb95' => reported.pb95, 'diesel' => reported.diesel, _ => reported.lpg };
 
     // Published country prices in the station's own currency.
     double? pick(String k) {
+      if (real != null) return switch (k) { 'pb95' => real.pb95, 'diesel' => real.diesel, _ => real.lpg };
       if (lt) {
         final p = f?.lt;
         return switch (k) { 'pb95' => p?.pb95, 'diesel' => p?.diesel, _ => p?.lpg };
@@ -487,7 +495,8 @@ class _FuelPrices extends StatelessWidget {
     }
 
     Widget cell(String label, String k) {
-      final mine = switch (k) { 'pb95' => seen?.pb95, 'diesel' => seen?.diesel, _ => seen?.lpg };
+      final mine = switch (k) { 'pb95' => seen?.pb95, 'diesel' => seen?.diesel, _ => seen?.lpg } ?? rep(k)?.price;
+      final byDrivers = switch (k) { 'pb95' => seen?.pb95, 'diesel' => seen?.diesel, _ => seen?.lpg } == null && rep(k) != null;
       return Expanded(
         child: Container(
           padding: const EdgeInsets.all(12),
@@ -496,7 +505,10 @@ class _FuelPrices extends StatelessWidget {
             Text(label, style: context.tt.bodySmall),
             const SizedBox(height: 2),
             Text(both(mine ?? pick(k)), style: context.tt.titleMedium!.copyWith(height: 1.25)),
-            if (mine != null) Text(context.s('mapSeenYou'), style: context.tt.bodySmall!.copyWith(color: c.good)),
+            if (byDrivers)
+              Text(context.s('mapDrivers', {'d': rep(k)!.days == 0 ? context.s('today2') : context.s('daysAgo', {'n': rep(k)!.days})}), style: context.tt.bodySmall!.copyWith(color: c.good))
+            else if (mine != null)
+              Text(context.s('mapSeenYou'), style: context.tt.bodySmall!.copyWith(color: c.good)),
           ]),
         ),
       );
@@ -506,10 +518,17 @@ class _FuelPrices extends StatelessWidget {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [cell('Pb95', 'pb95'), const SizedBox(width: 8), cell(context.s('fuelDiesel'), 'diesel'), const SizedBox(width: 8), cell('LPG', 'lpg')]),
       const SizedBox(height: 8),
-      Text(
-        context.s(lt ? 'mapFuelAvgLT' : 'mapFuelAvgPL', {'src': src?.source ?? '—', 'd': src?.date ?? '—'}),
-        style: context.tt.bodySmall,
-      ),
+      if (real != null)
+        Row(children: [
+          Icon(Icons.verified_outlined, size: 15, color: c.good),
+          const SizedBox(width: 6),
+          Expanded(child: Text(context.s('mapFuelReal', {'t': real.at.length >= 16 ? real.at.substring(5, 16).replaceFirst(' ', ' ') : real.at}), style: context.tt.bodySmall!.copyWith(color: c.good))),
+        ])
+      else
+        Text(
+          context.s(lt ? 'mapFuelAvgLT' : 'mapFuelAvgPL', {'src': src?.source ?? '—', 'd': src?.date ?? '—'}),
+          style: context.tt.bodySmall,
+        ),
       if (seen != null) Text(context.s('mapSeenAt', {'t': '${dayMonth(seen.at, lang)} ${fmtMin(seen.at.hour * 60 + seen.at.minute)}'}), style: context.tt.bodySmall),
       const SizedBox(height: 10),
       BigButton(label: context.s('mapSeenAdd'), icon: Icons.edit_rounded, kind: BtnKind.secondary, onPressed: () => _seenSheet(context, st)),
@@ -558,3 +577,16 @@ Future<void> _seenSheet(BuildContext context, Store st) => showSheet(context, (c
         ]),
       );
     });
+
+
+/// The OpenStreetMap base layer used by every map in the app. Every tile you look at stays
+/// on the phone for 30 days, so towns you opened at home still show with no signal.
+/// (OSM's tile policy forbids bulk pre-downloads, so we only keep what was viewed.)
+Widget osmTiles(BuildContext context) => TileLayer(
+      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      userAgentPackageName: 'lt.zlotika.zlotika',
+      tileBuilder: Theme.of(context).brightness == Brightness.dark ? darkModeTileBuilder : null,
+      tileProvider: NetworkTileProvider(
+        cachingProvider: BuiltInMapCachingProvider.getOrCreateInstance(overrideFreshAge: const Duration(days: 30), maxCacheSize: 300000000),
+      ),
+    );

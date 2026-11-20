@@ -12,6 +12,7 @@ import '../../widgets/ui.dart';
 import '../scan/scan_screen.dart';
 import 'add_item_screen.dart';
 import 'item_sheet.dart';
+import 'deal_pick.dart' show dealName;
 
 /// The shopping list, grouped by the trip's shops. Prices come only from those shops.
 class ListScreen extends StatelessWidget {
@@ -300,7 +301,13 @@ class _ItemRow extends StatelessWidget {
                       style: context.tt.titleMedium!.copyWith(decoration: done ? TextDecoration.lineThrough : null),
                     ),
                     if (item.plName != null) PlName(item.plName!, maxLines: 1),
-                    if (pl != null) Padding(padding: const EdgeInsets.only(top: 3), child: Text(kind(pl), style: context.tt.bodySmall)),
+                    if (pl != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        // Which product the price is for, so a 30-egg pack isn't a mystery.
+                        child: Text(deal != null && pl.kind == PriceKind.deal ? '${kind(pl)}: ${dealName(context, deal)}' : kind(pl),
+                            maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.bodySmall),
+                      ),
                     if (ch != null && !done) Padding(padding: const EdgeInsets.only(top: 7), child: ch),
                   ]),
                 ),

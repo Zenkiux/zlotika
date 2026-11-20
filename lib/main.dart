@@ -20,6 +20,7 @@ Future<void> main() async {
   runApp(AppScope(state: state, child: const ZlotikaApp()));
   state.refreshRate();
   state.loadStores();
+  state.loadLtFuel();
   state.loadPrices();
   state.checkUpdate();
   await Alerts.init(state);

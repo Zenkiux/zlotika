@@ -14,6 +14,9 @@ String shortDealName(String name) {
   return p.length > 1 ? '${p[1]} · ${p[0]}' : name;
 }
 
+/// The deal's name in the app's language (translated by the collector), else the Polish one tidied.
+String dealName(BuildContext context, Deal d) => (context.lang == Lang.lt ? d.nameLt : d.nameEn) ?? shortDealName(d.name);
+
 /// One deal as a tappable row: shop, Polish name, price, how long it lasts.
 class DealPickRow extends StatelessWidget {
   const DealPickRow({super.key, required this.deal, required this.onTap});
@@ -44,7 +47,7 @@ class DealPickRow extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(chain?.name ?? deal.chain, style: context.tt.titleMedium),
               const SizedBox(height: 2),
-              Text(shortDealName(deal.name), maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.bodyMedium),
+              Text(dealName(context, deal), maxLines: 2, overflow: TextOverflow.ellipsis, style: context.tt.bodyMedium),
               const SizedBox(height: 4),
               Wrap(spacing: 8, runSpacing: 4, children: [
                 if (deal.validTo != null)

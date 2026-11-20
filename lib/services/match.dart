@@ -36,6 +36,14 @@ bool _has(List<String> words, String stem, {int within = 99}) {
 const _nonFoodChains = {'rossmann', 'hebe', 'pepco', 'action'};
 
 List<Deal> matchDeals(String plName, Iterable<Deal> deals, {int max = 12, bool food = false}) {
+  // The collector tags deals with the everyday item they are ("Jajka"), read by a language
+  // model from the full name. When the feed has tags, trust them: exact, and a toy
+  // "Jajko niespodzianka" never passes for eggs.
+  final tagged = deals.any((d) => d.term != null);
+  if (tagged) {
+    final exact = deals.where((d) => d.term == plName).toList();
+    if (exact.isNotEmpty) return _rank(exact).take(max).toList();
+  }
   final keys = _words(plName).where((w) => !_stop.contains(w)).map(_stem).toList();
   if (keys.isEmpty) return const [];
   final head = keys.first;
@@ -53,8 +61,14 @@ List<Deal> matchDeals(String plName, Iterable<Deal> deals, {int max = 12, bool f
     if (!_has(w, head, within: brandFirst ? 2 : 1)) continue;
     final all = _words(d.name);
     if (!keys.skip(1).every((k) => _has(all, k))) continue;
+    // Tagged as a different everyday item, or the feed tags items and this one isn't one.
+    if (tagged && d.nameLt != null && d.term != plName) continue;
     out.add(d);
   }
+  return _rank(out).take(max).toList();
+}
+
+List<Deal> _rank(List<Deal> out) {
   // Website and vision-read deals before plain-OCR ones (OCR misreads more), then cheapest
   // per unit when known.
   bool shaky(Deal d) => d.ocr && !d.vision;
@@ -64,7 +78,7 @@ List<Deal> matchDeals(String plName, Iterable<Deal> deals, {int max = 12, bool f
     if (au != null && bu != null && a.unit == b.unit) return au.compareTo(bu);
     return a.price.compareTo(b.price);
   });
-  return out.take(max).toList();
+  return out;
 }
 
 /// Free-text watch ("Jacobs Krönung", "Pampers 4"): every word of 3+ letters

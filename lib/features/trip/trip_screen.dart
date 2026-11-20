@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_state.dart';
@@ -17,11 +19,12 @@ import '../more/more_screen.dart' show SettingsButton, UpdateBanner;
 import '../../widgets/ui.dart';
 import '../history/history_screen.dart';
 import '../list/add_item_screen.dart';
-import '../list/deal_pick.dart' show shortDealName;
+import '../list/deal_pick.dart' show dealName;
 import '../../data/dictionary.dart';
 import '../../services/deals.dart';
 import '../../services/match.dart';
 import '../plan/checklist_screen.dart';
+import '../map/map_screen.dart' show osmTiles;
 
 /// Trip economics. Every number shown is derived here from the trip, the list and the NBP rate.
 class TripCalc {
@@ -494,15 +497,17 @@ List<_Stop> _stops(AppState s) {
   }
   ordered.addAll(shops.where((x) => x.store == null));
   if (s.refuelLitres > 0) ordered.add(_Stop('fuel', s.storeFor('fuel'), const []));
+  // The shopper's own order wins where they set one; new stops keep the nearest-next place.
+  if (s.routeOrder.isNotEmpty) {
+    int rank(_Stop x) {
+      final i = s.routeOrder.indexOf(x.chain);
+      return i < 0 ? 1000 + ordered.indexOf(x) : i;
+    }
+    ordered.sort((a, b) => rank(a).compareTo(rank(b)));
+  }
   return ordered;
 }
 
-String _routeUrl(AppState s, List<_Stop> stops) {
-  final pts = [for (final x in stops) if (x.store != null) '${x.store!.lat},${x.store!.lon}'].take(9).join('|');
-  final home = Uri.encodeComponent('${s.origin.name}, Lithuania');
-  return 'https://www.google.com/maps/dir/?api=1&origin=$home&destination=$home'
-      '${pts.isEmpty ? '' : '&waypoints=${Uri.encodeComponent(pts)}'}&travelmode=driving';
-}
 
 class _Overview extends StatelessWidget {
   const _Overview({super.key});
@@ -602,7 +607,7 @@ class _Overview extends StatelessWidget {
           ),
           if (stops.any((x) => x.store != null)) ...[
             const SizedBox(height: 16),
-            BigButton(label: context.s('planRoute'), icon: Icons.alt_route_rounded, onPressed: () => _open(_routeUrl(s, stops))),
+            BigButton(label: context.s('routePlan'), icon: Icons.alt_route_rounded, onPressed: () => showRoute(context)),
           ],
           const SizedBox(height: 10),
           Pair(
@@ -708,7 +713,11 @@ class _Hero extends StatelessWidget {
               const SizedBox(height: 1),
               if (hasPrices)
                 Text(eurSigned(t.net, lang), style: context.tt.headlineMedium!.copyWith(color: ink, fontSize: 24, fontFeatures: const [FontFeature.tabularFigures()]))
-              else
+              else if (t.ready) ...[
+                // No shopping prices yet: the fuel part of the trip is still known.
+                Text(eurSigned(t.refuelSaving - t.tripCost, lang), style: context.tt.headlineMedium!.copyWith(color: ink, fontSize: 24, fontFeatures: const [FontFeature.tabularFigures()])),
+                Text(context.s('heroFuelOnly'), style: context.tt.bodySmall!.copyWith(color: soft)),
+              ] else
                 Text(context.s(s.items.any((e) => !e.checked) ? 'heroNoPrices' : 'heroNoItems'), style: context.tt.titleMedium!.copyWith(color: ink)),
               if (hasPrices && s.travellers > 1) Text(context.s('resultPerPerson', {'v': eur(t.net / s.travellers, lang)}), style: context.tt.bodySmall!.copyWith(color: soft)),
             ]),
@@ -1167,36 +1176,113 @@ class _HoursPill extends StatelessWidget {
   }
 }
 
-Future<void> _pickStore(BuildContext context, String chain) => showSheet(context, (ctx) {
-      final s = AppScope.of(ctx);
-      final f = s.storeFeed!;
-      final list = f.inTown(s.destId, chain);
-      final current = s.storeFor(chain);
-      final day = s.tripDay;
-      return ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-        children: [
-          Text(chain == 'fuel' ? ctx.s('planFuel') : chainById(chain)?.name ?? chain, style: ctx.tt.headlineSmall),
-          const SizedBox(height: 12),
-          for (final st in list)
-            ChoiceRow(
-              title: st.address ?? st.name ?? ctx.s('planNoAddress'),
-              subtitle: () {
-                final h = dayHours(f.hoursOf(st).hours, day, fuel: st.isFuel);
-                final brand = chain == 'fuel' ? '${st.brand} · ' : '';
-                return h.kind == HoursKind.open ? '$brand${h.spans.join(', ')}' : '$brand${ctx.s(h.kind == HoursKind.unknown ? 'hoursUnknown' : 'hoursClosed')}';
-              }(),
-              selected: st.id == current?.id,
-              leading: const Icon(Icons.location_on_rounded, color: Brand.plRed),
-              onTap: () {
-                s.chooseStore(chain, st.id);
-                Navigator.pop(ctx);
-              },
-            ),
-        ],
-      );
-    });
+Future<void> _pickStore(BuildContext context, String chain) => showSheet(context, (_) => _StorePicker(chain: chain));
+
+/// Which shop of a chain: a small map with numbered pins plus the same list underneath.
+/// Tap a pin to see it, tap again (or the row) to choose it.
+class _StorePicker extends StatefulWidget {
+  const _StorePicker({required this.chain});
+  final String chain;
+
+  @override
+  State<_StorePicker> createState() => _StorePickerState();
+}
+
+class _StorePickerState extends State<_StorePicker> {
+  final _map = MapController();
+  String? _focus;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final f = s.storeFeed!;
+    final list = f.inTown(s.destId, widget.chain);
+    final current = s.storeFor(widget.chain);
+    final day = s.tripDay;
+    final ch = chainById(widget.chain);
+    final focus = _focus ?? current?.id;
+    if (list.isEmpty) {
+      return Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), child: Text(context.s('planNoShop', {'town': s.dest.name}), style: context.tt.bodyLarge));
+    }
+    final pts = [for (final st in list) LatLng(st.lat, st.lon)];
+    final bounds = LatLngBounds.fromPoints(pts.length == 1 ? [pts.first, LatLng(pts.first.latitude + .004, pts.first.longitude + .004)] : pts);
+
+    void choose(Store st) {
+      s.chooseStore(widget.chain, st.id);
+      Navigator.pop(context);
+    }
+
+    String sub(Store st) {
+      final h = dayHours(f.hoursOf(st).hours, day, fuel: st.isFuel);
+      final brand = widget.chain == 'fuel' ? '${st.brand} · ' : '';
+      final hrs = h.kind == HoursKind.open ? h.spans.join(', ') : context.s(h.kind == HoursKind.unknown ? 'hoursUnknown' : 'hoursClosed');
+      return '$brand$hrs';
+    }
+
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 4),
+        child: Text(widget.chain == 'fuel' ? context.s('planFuel') : ch?.name ?? widget.chain, style: context.tt.headlineSmall),
+      ),
+      Padding(padding: const EdgeInsets.fromLTRB(18, 0, 18, 12), child: Text(context.s('pickStoreSub'), style: context.tt.bodyMedium)),
+      Container(
+        height: 240,
+        margin: const EdgeInsets.symmetric(horizontal: 18),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: c.line)),
+        child: FlutterMap(
+          mapController: _map,
+          options: MapOptions(
+            initialCameraFit: CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(36)),
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+          ),
+          children: [
+            osmTiles(context),
+            MarkerLayer(markers: [
+              for (var i = 0; i < list.length; i++)
+                Marker(
+                  point: pts[i],
+                  width: list[i].id == focus ? 38 : 30,
+                  height: list[i].id == focus ? 38 : 30,
+                  child: GestureDetector(
+                    onTap: () => list[i].id == _focus ? choose(list[i]) : setState(() => _focus = list[i].id),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: list[i].id == focus ? Brand.yellow : (widget.chain == 'fuel' ? const Color(0xFF1F2430) : ch?.color ?? Brand.ink3),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 4, offset: Offset(0, 1))],
+                      ),
+                      child: Text('${i + 1}',
+                          style: TextStyle(fontFamily: 'Manrope', fontWeight: FontWeight.w800, fontSize: 13, color: list[i].id == focus ? Brand.ink : (ch?.ink ?? Colors.white))),
+                    ),
+                  ),
+                ),
+            ]),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      Flexible(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+          children: [
+            for (var i = 0; i < list.length; i++)
+              ChoiceRow(
+                title: '${i + 1}. ${list[i].address ?? list[i].name ?? context.s('planNoAddress')}',
+                subtitle: sub(list[i]),
+                selected: list[i].id == current?.id,
+                onTap: () => choose(list[i]),
+              ),
+          ],
+        ),
+      ),
+    ]);
+  }
+}
 
 class _PriceField extends StatefulWidget {
   const _PriceField({super.key, required this.label, required this.suffix, required this.value, required this.onChanged, this.auto, this.autoSource});
@@ -1343,7 +1429,7 @@ class _PriceCheckState extends State<_PriceCheck> {
       if (q.length >= 3) {
         final seen = rows.map((r) => r.deal?.id).toSet();
         for (final d in matchLoose(q, s.deals.where(s.dealUsable)).where((d) => !seen.contains(d.id)).take(3)) {
-          rows.add((title: shortDealName(d.name), pl: null, deal: d, probe: ListItem(id: '', name: shortDealName(d.name), plName: d.name, dealId: d.id)));
+          rows.add((title: dealName(context, d), pl: null, deal: d, probe: ListItem(id: '', name: dealName(context, d), plName: d.name, dealId: d.id)));
         }
       }
     }
@@ -1410,6 +1496,164 @@ class _PriceCheckState extends State<_PriceCheck> {
         ),
         if (q.length >= 2 && rows.isEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: Text(context.s('pcNothing'), style: context.tt.bodyMedium)),
         for (final r in rows) row(r),
+      ]),
+    );
+  }
+}
+
+
+// ───────────────────────────── Route planner
+
+String _navUrl(String app, double lat, double lon) => switch (app) {
+      'waze' => 'https://waze.com/ul?ll=$lat,$lon&navigate=yes',
+      'apple' => 'https://maps.apple.com/?daddr=$lat,$lon&dirflg=d',
+      _ => 'https://www.google.com/maps/dir/?api=1&destination=$lat,$lon&travelmode=driving',
+    };
+
+/// The day's drive: home → shops in order → fuel → home. Google Maps takes the whole
+/// route at once; Waze and Apple Maps go stop by stop ("next stop").
+Future<void> showRoute(BuildContext context) => showSheet(context, (_) => const _RouteSheet());
+
+class _RouteSheet extends StatelessWidget {
+  const _RouteSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final c = context.c;
+    final lang = context.lang;
+    final all = _stops(s).where((x) => x.store != null).toList();
+    final left = all.where((x) => !s.routeDone.contains(x.chain)).toList();
+    final next = left.isEmpty ? null : left.first;
+    final ios = Theme.of(context).platform == TargetPlatform.iOS;
+    final km = s.origin.km[s.destId] ?? 0;
+
+    void move(int i, int d) => s.update((x) {
+          final ids = all.map((e) => e.chain).toList();
+          final j = i + d;
+          if (j < 0 || j >= ids.length) return;
+          final t = ids[i];
+          ids[i] = ids[j];
+          ids[j] = t;
+          x.routeOrder
+            ..clear()
+            ..addAll(ids);
+        });
+
+    String allUrl() {
+      final pts = [for (final x in left) '${x.store!.lat},${x.store!.lon}'];
+      final home = Uri.encodeComponent('${s.origin.name}, Lithuania');
+      if (pts.isEmpty) return 'https://www.google.com/maps/dir/?api=1&destination=$home&travelmode=driving';
+      return 'https://www.google.com/maps/dir/?api=1&destination=$home'
+          '&waypoints=${Uri.encodeComponent(pts.take(9).join('|'))}&travelmode=driving';
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 26),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(context.s('routeTitle'), style: context.tt.headlineSmall),
+        const SizedBox(height: 4),
+        Text(context.s('routeSub', {'n': all.length, 'km': km * 2, 'h': fmtNum(km * 2 / _avgKmh, lang)}), style: context.tt.bodyMedium),
+        const SizedBox(height: 14),
+        Segmented<String>(
+          value: s.navApp,
+          options: [('gmaps', 'Google Maps'), ('waze', 'Waze'), if (ios) ('apple', 'Apple')],
+          onChanged: (v) => s.update((x) => x.navApp = v),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+          child: Text(context.s(s.navApp == 'gmaps' ? 'routeGmapsHint' : 'routeStepHint'), style: context.tt.bodySmall),
+        ),
+        SectionTitle(context.s('routeOrder'), top: 18, action: s.routeOrder.isEmpty && s.routeDone.isEmpty ? null : context.s('routeReset'),
+            onAction: () => s.update((x) {
+                  x.routeOrder.clear();
+                  x.routeDone.clear();
+                })),
+        RowGroup(children: [
+          RowTile(icon: Icons.home_outlined, title: s.origin.name, subtitle: context.s('routeStart')),
+          for (var i = 0; i < all.length; i++)
+            Builder(builder: (context) {
+              final x = all[i];
+              final done = s.routeDone.contains(x.chain);
+              final ch = chainById(x.chain);
+              final h = dayHours(s.storeFeed!.hoursOf(x.store!).hours, s.tripDay, fuel: x.fuel);
+              final hours = h.kind == HoursKind.open ? h.spans.join(', ') : context.s(h.kind == HoursKind.unknown ? 'hoursUnknown' : 'hoursClosed');
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(border: Border(bottom: BorderSide(color: c.line))),
+                  child: Row(children: [
+                    GestureDetector(
+                      onTap: () => s.update((y) => done ? y.routeDone.remove(x.chain) : y.routeDone.add(x.chain)),
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: done ? c.good : (x.fuel ? c.blueSoft : c.raised),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: done ? c.good : c.line),
+                        ),
+                        child: done
+                            ? const Icon(Icons.check_rounded, size: 16, color: Color(0xFF08120D))
+                            : x.fuel
+                                ? Icon(Icons.local_gas_station_rounded, size: 15, color: c.blue)
+                                : Text('${i + 1}', style: context.tt.labelSmall!.copyWith(color: c.text, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: GestureDetector(
+                       behavior: HitTestBehavior.opaque,
+                       onTap: () => _pickStore(context, x.chain),
+                       child: Opacity(
+                        opacity: done ? .45 : 1,
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            if (ch != null && !x.fuel) ...[Dot(ch.color), const SizedBox(width: 6)],
+                            Flexible(child: Text(x.fuel ? '${context.s('planFuel')} · ${x.store!.brand}' : (ch?.name ?? x.chain), style: context.tt.titleMedium)),
+                          ]),
+                          Text('${x.store!.address ?? x.store!.name ?? ''} · $hours', maxLines: 1, overflow: TextOverflow.ellipsis, style: context.tt.bodySmall!.copyWith(color: c.text2)),
+                        ]),
+                      ),
+                     ),
+                    ),
+                    IconButton(visualDensity: VisualDensity.compact, onPressed: i == 0 ? null : () => move(i, -1), icon: const Icon(Icons.keyboard_arrow_up_rounded)),
+                    IconButton(visualDensity: VisualDensity.compact, onPressed: i == all.length - 1 ? null : () => move(i, 1), icon: const Icon(Icons.keyboard_arrow_down_rounded)),
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: context.s('routeGoHere'),
+                      onPressed: () => _open(_navUrl(s.navApp, x.store!.lat, x.store!.lon)),
+                      icon: Icon(Icons.navigation_outlined, color: c.accentText),
+                    ),
+                  ]),
+                ),
+              );
+            }),
+          RowTile(icon: Icons.home_outlined, title: s.origin.name, subtitle: context.s('routeEnd'), last: true),
+        ]),
+        const SizedBox(height: 16),
+        if (s.navApp == 'gmaps')
+          BigButton(label: context.s(left.length == all.length ? 'routeStartAll' : 'routeContinue', {'n': left.length}), icon: Icons.navigation_rounded, onPressed: () => _open(allUrl()))
+        else if (next != null)
+          BigButton(
+            label: context.s('routeNext', {'name': next.fuel ? context.s('planFuel') : (chainById(next.chain)?.name ?? next.chain)}),
+            icon: Icons.navigation_rounded,
+            onPressed: () => _open(_navUrl(s.navApp, next.store!.lat, next.store!.lon)),
+          )
+        else
+          BigButton(
+            label: context.s('routeHome', {'city': s.origin.name}),
+            icon: Icons.home_rounded,
+            onPressed: () => _open(_navUrl(s.navApp, s.origin.lat, s.origin.lon)),
+          ),
+        if (s.navApp != 'gmaps' && next != null) ...[
+          const SizedBox(height: 8),
+          BigButton(label: context.s('routeArrived'), icon: Icons.check_rounded, kind: BtnKind.secondary, onPressed: () => s.update((x) => x.routeDone.add(next.chain))),
+        ],
+        const SizedBox(height: 10),
+        Text(context.s('routeOrderHint'), style: context.tt.bodySmall, textAlign: TextAlign.center),
       ]),
     );
   }

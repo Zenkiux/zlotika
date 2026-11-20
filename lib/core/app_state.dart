@@ -16,6 +16,7 @@ import '../services/stores.dart';
 import '../services/prices.dart';
 import '../services/wallet.dart';
 import '../services/updates.dart';
+import '../services/ltfuel.dart';
 import 'i18n.dart';
 
 enum FuelType { diesel, petrol, lpg }
@@ -131,6 +132,11 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // Route: the shopper's own stop order, stops already visited, and the navigation app.
+  final List<String> routeOrder = []; // chain ids (and 'fuel') in driving order
+  final Set<String> routeDone = {};
+  String navApp = 'gmaps'; // gmaps | waze | apple
 
   // Wallet: loyalty cards, and fuel prices the shopper saw at stations.
   final List<LoyaltyCard> wallet = [];
@@ -467,6 +473,37 @@ class AppState extends ChangeNotifier {
 
   void chooseStore(String chain, String storeId) => update((s) => s.storeChoice['$destId/$chain'] = storeId);
 
+  // Lithuanian stations with today's real pump prices (LEA).
+  LtFuelFeed? ltStations;
+
+  PlFuelFeed? plReports; // Polish prices drivers reported this week
+
+  Future<void> loadLtFuel() async {
+    try {
+      final cached = _prefs.getString('$_key.plfuel');
+      if (cached != null) plReports = PlFuelFeed.parse(cached);
+    } catch (_) {}
+    try {
+      final body = await PlFuelFeed.fetch();
+      plReports = PlFuelFeed.parse(body);
+      await _prefs.setString('$_key.plfuel', body);
+      notifyListeners();
+    } catch (_) {}
+    try {
+      final cached = _prefs.getString('$_key.ltfuel');
+      if (cached != null) {
+        ltStations = LtFuelFeed.parse(cached);
+        notifyListeners();
+      }
+    } catch (_) {}
+    try {
+      final body = await LtFuelFeed.fetch();
+      ltStations = LtFuelFeed.parse(body);
+      await _prefs.setString('$_key.ltfuel', body);
+      notifyListeners();
+    } catch (_) {/* keep cached */}
+  }
+
   Future<void> loadStores() async {
     // Whichever is newest wins: the snapshot shipped with the app, the cached feed, or the online one.
     bool newer(StoreFeed f) => storeFeed?.generatedAt == null || (f.generatedAt != null && f.generatedAt!.isAfter(storeFeed!.generatedAt!));
@@ -616,6 +653,13 @@ class AppState extends ChangeNotifier {
         ..clear()
         ..addAll(((j['mapChains'] as List?) ?? []).cast<String>());
       mapOpenOnly = j['mapOpenOnly'] as bool? ?? false;
+      routeOrder
+        ..clear()
+        ..addAll(((j['routeOrder'] as List?) ?? []).cast<String>());
+      routeDone
+        ..clear()
+        ..addAll(((j['routeDone'] as List?) ?? []).cast<String>());
+      navApp = j['navApp'] as String? ?? 'gmaps';
       ltShop = j['ltShop'] as String? ?? 'maxima';
       items
         ..clear()
@@ -670,6 +714,7 @@ class AppState extends ChangeNotifier {
           'tripReady': tripReady, 'tripChains': tripChains, 'cards': cards.toList(), 'tripDate': tripDate, 'ltShop': ltShop,
           'wallet': wallet.map((c) => c.toJson()).toList(), 'seenFuel': seenFuel.map((k, v) => MapEntry(k, v.toJson())),
           'mapLayers': mapLayers.toList(), 'mapChains': mapChains.toList(), 'mapOpenOnly': mapOpenOnly,
+          'routeOrder': routeOrder, 'routeDone': routeDone.toList(), 'navApp': navApp,
           'watch': watch.map((w) => w.toJson()).toList(), 'alerted': alerted.toList(), 'alertsOn': alertsOn,
           'trips': trips.map((t) => t.toJson()).toList(),
           'priceMemory': priceMemory.map((k, v) => MapEntry(k, {'pl': v.pl, 'chain': v.chain, 'date': v.date})),
@@ -722,6 +767,9 @@ class AppState extends ChangeNotifier {
       ..addAll({'shops', 'fuel', 'fuelLT', 'fuelPL'});
     mapChains.clear();
     mapOpenOnly = false;
+    routeOrder.clear();
+    routeDone.clear();
+    navApp = 'gmaps';
     tripDate = null;
     ltShop = 'maxima';
     priceFixes.clear();

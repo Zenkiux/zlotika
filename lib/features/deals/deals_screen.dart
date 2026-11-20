@@ -30,7 +30,22 @@ double _sortPct(Deal d) {
   return p > .8 ? 0 : p;
 }
 
+/// Polish units on shelf labels in the app's language: szt. → vnt. / pcs, opak. → pak. / pack.
+String unitName(String u, Lang lang) {
+  final k = u.toLowerCase().replaceAll('.', '').trim();
+  return switch (k) {
+    'szt' || 'sztuka' => lang == Lang.lt ? 'vnt.' : 'pc',
+    'opak' || 'op' => lang == Lang.lt ? 'pak.' : 'pack',
+    'kpl' => lang == Lang.lt ? 'kompl.' : 'set',
+    'rolka' || 'rol' => lang == Lang.lt ? 'rul.' : 'roll',
+    'para' => lang == Lang.lt ? 'pora' : 'pair',
+    _ => u,
+  };
+}
+
 String? dealTranslation(BuildContext context, Deal d) {
+  final full = context.lang == Lang.lt ? d.nameLt : d.nameEn;
+  if (full != null) return full;
   final t = guessTerm(d.name);
   if (t == null) return null;
   return context.lang == Lang.lt ? t.lt : t.en;
@@ -87,7 +102,7 @@ class _DealsScreenState extends State<DealsScreen> {
       if (mine && !s.tripChains.contains(d.chain)) return false;
       if (query.isEmpty) return true;
       final tr = guessTerm(d.name);
-      final hay = foldText('${d.name} ${tr?.lt ?? ''} ${tr?.en ?? ''} ${chainById(d.chain)?.name ?? ''}');
+      final hay = foldText('${d.name} ${d.nameLt ?? ''} ${d.nameEn ?? ''} ${tr?.lt ?? ''} ${tr?.en ?? ''} ${chainById(d.chain)?.name ?? ''}');
       return query.split(RegExp(r'\s+')).every(hay.contains);
     }).toList()
       ..sort((a, b) => _sortPct(b).compareTo(_sortPct(a)));
@@ -275,7 +290,7 @@ class DealCard extends StatelessWidget {
             const SizedBox(height: 10),
             Wrap(spacing: 6, runSpacing: 6, children: [
               if (pct != null && pct >= .05 && pct <= .8) Pill('−${(pct * 100).round()} %', tone: Tone.bad),
-              if (deal.unit != null && deal.unitPrice != null) Pill('${zl(deal.unitPrice!, lang)}/${deal.unit}'),
+              if (deal.unit != null && deal.unitPrice != null) Pill('${zl(deal.unitPrice!, lang)}/${unitName(deal.unit!, lang)}'),
               if (lt != null) Pill('LT ≈ ${eur(lt.price, lang)}', tone: Tone.good),
               if (deal.card == true)
                 Pill(chain?.card ?? context.s('dealsCardGeneric'), tone: locked ? Tone.warn : Tone.accent, icon: locked ? Icons.lock_outline_rounded : Icons.credit_card_rounded),
@@ -418,7 +433,7 @@ class _DealSheetState extends State<_DealSheet> {
                 Text(zl(price, lang), style: context.tt.displayMedium),
                 if (eurV != null) Text('≈ ${eur(eurV, lang)}', style: context.tt.titleMedium!.copyWith(color: c.text2)),
                 if (d.unitPrice != null && d.unit != null)
-                  Text(context.s('dealPerUnit', {'v': zl(d.unitPrice!, lang), 'unit': d.unit!}), style: context.tt.bodyMedium),
+                  Text(context.s('dealPerUnit', {'v': zl(d.unitPrice!, lang), 'unit': unitName(d.unit!, lang)}), style: context.tt.bodyMedium),
               ]),
             ),
             if (d.oldPrice != null && !fixed) Text(zl(d.oldPrice!, lang), style: context.tt.titleMedium!.copyWith(decoration: TextDecoration.lineThrough, color: c.text3)),

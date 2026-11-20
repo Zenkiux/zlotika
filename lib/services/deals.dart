@@ -16,6 +16,9 @@ class Deal {
     required this.id,
     required this.chain,
     required this.name,
+    this.nameLt,
+    this.nameEn,
+    this.term,
     required this.price,
     this.oldPrice,
     this.unit,
@@ -39,6 +42,8 @@ class Deal {
   });
 
   final String id, chain, name; // name = original Polish text
+  final String? nameLt, nameEn; // shopper names translated by the collector
+  final String? term; // the everyday item it is (dictionary Polish name), tagged by the collector
   final double price; // zł
   final double? oldPrice, unitPrice;
   final String? unit; // "kg", "l", "szt."
@@ -66,6 +71,9 @@ class Deal {
         id: j['id'] as String,
         chain: j['chain'] as String,
         name: j['name'] as String,
+        nameLt: j['nameLt'] as String?,
+        nameEn: j['nameEn'] as String?,
+        term: (j['term'] as String?)?.isEmpty == true ? null : j['term'] as String?,
         price: mb?.price ?? raw,
         oldPrice: old,
         unit: j['unit'] as String?,
